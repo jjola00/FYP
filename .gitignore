@@ -1,0 +1,26 @@
+# Environments
+.venv/
+env/
+venv/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Data / local DB
+data/*.db
+data/*.db-journal
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+dist/
+build/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

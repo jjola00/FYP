@@ -1,0 +1,138 @@
+:root {
+  --bg: #0f172a;
+  --panel: #111827;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-2: #22d3ee;
+  --danger: #f87171;
+  --success: #34d399;
+  --border: #1f2937;
+  --radius: 10px;
+  --shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.08), transparent 30%),
+              radial-gradient(circle at 80% 10%, rgba(34, 211, 238, 0.07), transparent 28%),
+              var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  display: flex;
+  justify-content: center;
+  padding: 32px 18px 48px;
+}
+
+.page {
+  width: min(960px, 100%);
+}
+
+.header h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b1021;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 10px 20px rgba(56, 189, 248, 0.25);
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.status {
+  color: var(--accent-2);
+  font-family: var(--mono);
+}
+
+.timer {
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.hidden {
+  display: none;
+}
+
+.canvas-wrap {
+  display: inline-flex;
+  padding: 12px;
+  background: #0b1223;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+canvas {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0a0f1d;
+  touch-action: none;
+}
+
+.hint {
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+input[type="range"] {
+  flex: 1;
+}
+
+.slider-status {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.slider-status.success {
+  color: var(--success);
+}
+
+.slider-status.fail {
+  color: var(--danger);
+}

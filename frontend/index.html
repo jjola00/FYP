@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ephemeral Line CAPTCHA</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <h1>Ephemeral Line CAPTCHA</h1>
+      <p class="subtitle">Trace the hidden line as it appears. Fallback: slider.</p>
+    </header>
+
+    <section class="controls">
+      <button id="reload-btn">New Challenge</button>
+      <button id="fallback-btn">Use Slider Fallback</button>
+      <span class="status" id="status">Loading…</span>
+      <span class="timer" id="timer"></span>
+    </section>
+
+    <section id="line-section" class="panel">
+      <div class="canvas-wrap">
+        <canvas id="captcha-canvas" width="400" height="400"></canvas>
+      </div>
+      <p class="hint">
+        Press/touch the start point and follow the line as it appears. Do not lift until done.
+      </p>
+    </section>
+
+    <section id="slider-section" class="panel hidden">
+      <p class="hint">Fallback: drag the slider fully to the right to verify.</p>
+      <div class="slider-row">
+        <input id="slider" type="range" min="0" max="100" value="0" />
+        <button id="slider-reset">Reset</button>
+        <button id="back-to-line">Back to Line Challenge</button>
+      </div>
+      <div class="slider-status" id="slider-status">Not solved</div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
