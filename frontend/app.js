@@ -112,31 +112,93 @@ function drawMarkers() {
   const pts = state.challenge.points;
   const start = pts[0];
 
+  // Save context state
+  ctx.save();
   ctx.fillStyle = "#22d3ee";
   ctx.beginPath();
   ctx.arc(start[0], start[1], 8, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+function drawGuideLine() {
+  if (!state.challenge || !state.challenge.points?.length) return;
+  if (!state.drawing) return;
+  
+  const pts = state.challenge.points;
+  const revealDistance = 50; // How far ahead to show the guide line
+  
+  // Find the furthest point the user has reached
+  let maxProgress = 0;
+  if (state.segments.length > 0) {
+    const lastSeg = state.segments[state.segments.length - 1];
+    // Calculate how far along the path the user is
+    for (let i = 0; i < pts.length; i++) {
+      const dx = pts[i][0] - lastSeg.x;
+      const dy = pts[i][1] - lastSeg.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < revealDistance) {
+        maxProgress = Math.max(maxProgress, i);
+      }
+    }
+    
+    // Log progress every 10 segments
+    if (state.segments.length % 10 === 0) {
+      console.log(`Guide line progress: ${maxProgress}/${pts.length} points revealed`);
+    }
+  }
+  
+  // Draw the guide line up to slightly ahead of user's position
+  if (maxProgress > 0) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(34, 211, 238, 0.6)"; // Cyan guide line
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    
+    const endIdx = Math.min(maxProgress + 5, pts.length - 1);
+    for (let i = 1; i <= endIdx; i++) {
+      ctx.lineTo(pts[i][0], pts[i][1]);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawSegments() {
   if (state.segments.length < 2) return;
+  
+  // Save context state
+  ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(56, 189, 248, 1)";
 
   for (let i = 1; i < state.segments.length; i++) {
     const prev = state.segments[i - 1];
     const curr = state.segments[i];
-    ctx.strokeStyle = `rgba(56, 189, 248, 1)`;
     ctx.lineWidth = curr.lineWidth;
     ctx.beginPath();
     ctx.moveTo(prev.x, prev.y);
     ctx.lineTo(curr.x, curr.y);
     ctx.stroke();
   }
+  
+  // Restore context state
+  ctx.restore();
+  
+  // Diagnostic logging (can be removed after testing)
+  if (state.drawing && state.segments.length % 5 === 0) {
+    console.log(`Drawing ${state.segments.length} segments`);
+  }
 }
 
 function drawFrame() {
   clearCanvas();
+  drawGuideLine();
   drawMarkers();
   drawSegments();
 }
@@ -205,6 +267,7 @@ function handlePointerDown(evt) {
     createdAt: performance.now(),
     lineWidth,
   });
+  console.log(`PointerDown at (${evt.offsetX}, ${evt.offsetY}), lineWidth: ${lineWidth}`);
   drawFrame();
 }
 
@@ -221,6 +284,10 @@ function handlePointerMove(evt) {
     createdAt: performance.now(),
     lineWidth,
   });
+  // Log every 10th move event to avoid console spam
+  if (state.segments.length % 10 === 0) {
+    console.log(`PointerMove: ${state.segments.length} segments collected`);
+  }
   drawFrame();
 }
 
