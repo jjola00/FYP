@@ -9,11 +9,14 @@ export const MAX_GENTLE_BENDS = 2;
 
 export const CHALLENGE_TTL_MS = 12000; // acceptable range 10–15s
 export const TOO_FAST_THRESHOLD_MS = 1000;
+export const MIN_SAMPLES = 20;
 
 export const TRAIL_VISIBLE_MS = 400;
 export const TRAIL_FADEOUT_MS = 600; // fades out after visible window
 
 export const REQUIRED_COVERAGE_RATIO = 0.75; // 70–80% allowed; default to 75%
+export const SPEED_CONSTANTITY_RATIO = 0.08;
+export const MAX_ACCEL_PX_PER_S2 = 12000;
 
 export type PointerProfile = 'mouse' | 'touch';
 
@@ -26,8 +29,6 @@ export const POINTER_CONFIG: Record<PointerProfile, PointerConfig> = {
   mouse: { tolerancePx: 20, lineThicknessPx: 3 },
   touch: { tolerancePx: 30, lineThicknessPx: 6 },
 };
-
-export const FALLBACK_AFTER_FAILURES = 3;
 
 export enum AttemptOutcomeReason {
   Success = 'success',

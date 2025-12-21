@@ -15,7 +15,6 @@
 
     <section class="controls">
       <button id="reload-btn">New Challenge</button>
-      <button id="fallback-btn">Use Slider Fallback</button>
       <span class="status" id="status">Loading…</span>
       <span class="timer" id="timer"></span>
     </section>
@@ -27,16 +26,6 @@
       <p class="hint">
         Press/touch the start point and follow the line as it appears. Do not lift until done.
       </p>
-    </section>
-
-    <section id="slider-section" class="panel hidden">
-      <p class="hint">Fallback: drag the slider fully to the right to verify.</p>
-      <div class="slider-row">
-        <input id="slider" type="range" min="0" max="100" value="0" />
-        <button id="slider-reset">Reset</button>
-        <button id="back-to-line">Back to Line Challenge</button>
-      </div>
-      <div class="slider-status" id="slider-status">Not solved</div>
     </section>
   </main>
 

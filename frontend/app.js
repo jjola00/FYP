@@ -9,6 +9,7 @@ const config = {
   requiredCoverage: 0.75,
   lineWidthMouse: 4,
   lineWidthTouch: 7,
+  minSamples: 20,
 };
 
 const ui = {
@@ -16,13 +17,7 @@ const ui = {
   status: document.getElementById("status"),
   timer: document.getElementById("timer"),
   reloadBtn: document.getElementById("reload-btn"),
-  fallbackBtn: document.getElementById("fallback-btn"),
   lineSection: document.getElementById("line-section"),
-  sliderSection: document.getElementById("slider-section"),
-  slider: document.getElementById("slider"),
-  sliderReset: document.getElementById("slider-reset"),
-  backToLine: document.getElementById("back-to-line"),
-  sliderStatus: document.getElementById("slider-status"),
 };
 
 const ctx = ui.canvas.getContext("2d");
@@ -36,7 +31,14 @@ const state = {
   trajectory: [],
   segments: [],
   pointerProfile: "mouse",
-  failCount: 0,
+  lookahead: [],
+  lastPeekAt: 0,
+  nonce: "",
+  token: "",
+  finishPoint: null,
+  showFinish: false,
+  devicePixelRatio: window.devicePixelRatio || 1,
+  distanceToEnd: null,
 };
 
 function setStatus(text, tone = "info") {
@@ -49,22 +51,19 @@ function setTimer(text) {
   ui.timer.textContent = text;
 }
 
-function showSlider() {
-  ui.lineSection.classList.add("hidden");
-  ui.sliderSection.classList.remove("hidden");
-}
-
-function showLine() {
-  ui.sliderSection.classList.add("hidden");
-  ui.lineSection.classList.remove("hidden");
-}
-
 function pointerProfileFromEvent(evt) {
   return evt.pointerType === "mouse" ? "mouse" : "touch";
 }
 
 function lineWidthForProfile(profile) {
-  return profile === "mouse" ? config.lineWidthMouse : config.lineWidthTouch;
+  const tol = state.challenge?.tolerance;
+  const dpr = state.devicePixelRatio || 1;
+  if (profile === "mouse") {
+    const base = tol?.mouse ? Math.max(3, Math.min(8, tol.mouse * 0.4)) : config.lineWidthMouse;
+    return base * (dpr >= 2 ? 1.15 : 1);
+  }
+  const base = tol?.touch ? Math.max(6, Math.min(10, tol.touch * 0.35)) : config.lineWidthTouch;
+  return base * (dpr >= 2 ? 1.15 : 1);
 }
 
 function startTimer() {
@@ -86,6 +85,7 @@ async function fetchChallenge() {
   state.drawing = false;
   state.trajectory = [];
   state.segments = [];
+  state.lookahead = [];
   try {
     const res = await fetch(`${API_BASE}/captcha/line/new`, { method: "POST" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -93,6 +93,12 @@ async function fetchChallenge() {
     state.challenge = data;
     state.expiresAtMs = data.expiresAt * 1000;
     state.pointerProfile = "mouse";
+    state.nonce = data.nonce;
+    state.token = data.token;
+    state.finishPoint = null;
+    state.showFinish = false;
+    // prime lookahead around start point
+    await fetchLookahead(data.startPoint[0], data.startPoint[1], true);
     startTimer();
     setStatus("Ready. Press/touch start and trace the line.");
     drawFrame();
@@ -108,92 +114,79 @@ function clearCanvas() {
 }
 
 function drawMarkers() {
-  if (!state.challenge || !state.challenge.points?.length) return;
-  const pts = state.challenge.points;
-  const start = pts[0];
-
+  if (!state.challenge?.startPoint) return;
+  const start = state.challenge.startPoint;
   // Save context state
   ctx.save();
   ctx.fillStyle = "#22d3ee";
   ctx.beginPath();
   ctx.arc(start[0], start[1], 8, 0, Math.PI * 2);
   ctx.fill();
+   // Finish marker appears only when near end
+  if (state.showFinish && state.finishPoint) {
+    ctx.fillStyle = "#34d399";
+    ctx.beginPath();
+    ctx.arc(state.finishPoint[0], state.finishPoint[1], 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
 function drawGuideLine() {
-  if (!state.challenge || !state.challenge.points?.length) return;
-  if (!state.drawing) return;
-  
-  const pts = state.challenge.points;
-  const revealDistance = 50; // How far ahead to show the guide line
-  
-  // Find the furthest point the user has reached
-  let maxProgress = 0;
-  if (state.segments.length > 0) {
-    const lastSeg = state.segments[state.segments.length - 1];
-    // Calculate how far along the path the user is
-    for (let i = 0; i < pts.length; i++) {
-      const dx = pts[i][0] - lastSeg.x;
-      const dy = pts[i][1] - lastSeg.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < revealDistance) {
-        maxProgress = Math.max(maxProgress, i);
-      }
-    }
-    
-    // Log progress every 10 segments
-    if (state.segments.length % 10 === 0) {
-      console.log(`Guide line progress: ${maxProgress}/${pts.length} points revealed`);
-    }
+  if (!state.lookahead.length) return;
+  ctx.save();
+  ctx.strokeStyle = "rgba(34, 211, 238, 0.6)"; // Cyan guide line
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(state.lookahead[0][0], state.lookahead[0][1]);
+  for (let i = 1; i < state.lookahead.length; i++) {
+    ctx.lineTo(state.lookahead[i][0], state.lookahead[i][1]);
   }
-  
-  // Draw the guide line up to slightly ahead of user's position
-  if (maxProgress > 0) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(34, 211, 238, 0.6)"; // Cyan guide line
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    
-    const endIdx = Math.min(maxProgress + 5, pts.length - 1);
-    for (let i = 1; i <= endIdx; i++) {
-      ctx.lineTo(pts[i][0], pts[i][1]);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawSegments() {
   if (state.segments.length < 2) return;
-  
-  // Save context state
+
+  const now = performance.now();
+  const visibleMs = state.challenge?.trail?.visibleMs ?? config.trailVisibleMs;
+  const fadeMs = state.challenge?.trail?.fadeoutMs ?? config.trailFadeMs;
+  const maxAge = visibleMs + fadeMs;
+
+  // Keep only recent history; compute alpha per segment for fade.
+  const recent = [];
+  for (const seg of state.segments) {
+    const age = now - seg.createdAt;
+    if (age > maxAge) continue;
+    const alpha =
+      age <= visibleMs ? 1 : Math.max(0, 1 - (age - visibleMs) / Math.max(1, fadeMs));
+    recent.push({ ...seg, alpha });
+  }
+  state.segments = recent;
+  if (recent.length < 2) return;
+
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.strokeStyle = "rgba(56, 189, 248, 1)";
 
-  for (let i = 1; i < state.segments.length; i++) {
-    const prev = state.segments[i - 1];
-    const curr = state.segments[i];
+  for (let i = 1; i < recent.length; i++) {
+    const prev = recent[i - 1];
+    const curr = recent[i];
+    const midX = (curr.x + prev.x) / 2;
+    const midY = (curr.y + prev.y) / 2;
+    const alpha = Math.min(prev.alpha, curr.alpha);
+    ctx.strokeStyle = `rgba(56, 189, 248, ${alpha.toFixed(3)})`;
     ctx.lineWidth = curr.lineWidth;
     ctx.beginPath();
     ctx.moveTo(prev.x, prev.y);
-    ctx.lineTo(curr.x, curr.y);
+    ctx.quadraticCurveTo(prev.x, prev.y, midX, midY);
     ctx.stroke();
   }
-  
-  // Restore context state
+
   ctx.restore();
-  
-  // Diagnostic logging (can be removed after testing)
-  if (state.drawing && state.segments.length % 5 === 0) {
-    console.log(`Drawing ${state.segments.length} segments`);
-  }
 }
 
 function drawFrame() {
@@ -205,14 +198,22 @@ function drawFrame() {
 
 async function verifyAttempt() {
   if (!state.challenge || state.trajectory.length < 2) return;
+  if (state.trajectory.length < config.minSamples) {
+    setStatus("Trace too short, try again.", "error");
+    fetchChallenge();
+    return;
+  }
   setStatus("Verifying...");
   try {
     const body = {
       challengeId: state.challenge.challengeId,
+      nonce: state.nonce,
+      token: state.token,
       sessionId: "demo-session",
       pointerType: state.pointerProfile,
       osFamily: navigator.platform,
       browserFamily: navigator.userAgent,
+      devicePixelRatio: state.devicePixelRatio,
       trajectory: state.trajectory,
     };
     const res = await fetch(`${API_BASE}/captcha/line/verify`, {
@@ -222,18 +223,10 @@ async function verifyAttempt() {
     });
     const data = await res.json();
     if (data.passed) {
-      setStatus(`Passed (coverage ${(data.coverageRatio * 100).toFixed(0)}%)`, "success");
-      state.failCount = 0;
+      setStatus("Passed.", "success");
     } else {
-      state.failCount += 1;
-      setStatus(`Failed: ${data.reason}`, "error");
-      if (data.reason === "timeout") {
-        await fetchChallenge();
-      } else if (state.failCount >= 3) {
-        showSlider();
-      } else {
-        await fetchChallenge();
-      }
+      setStatus("Incorrect. Try again.", "error");
+      await fetchChallenge();
     }
   } catch (err) {
     console.error(err);
@@ -267,7 +260,6 @@ function handlePointerDown(evt) {
     createdAt: performance.now(),
     lineWidth,
   });
-  console.log(`PointerDown at (${evt.offsetX}, ${evt.offsetY}), lineWidth: ${lineWidth}`);
   drawFrame();
 }
 
@@ -284,10 +276,7 @@ function handlePointerMove(evt) {
     createdAt: performance.now(),
     lineWidth,
   });
-  // Log every 10th move event to avoid console spam
-  if (state.segments.length % 10 === 0) {
-    console.log(`PointerMove: ${state.segments.length} segments collected`);
-  }
+  fetchLookahead(evt.offsetX, evt.offsetY);
   drawFrame();
 }
 
@@ -305,7 +294,14 @@ function setupCanvas() {
   ui.canvas.addEventListener("pointerdown", handlePointerDown);
   ui.canvas.addEventListener("pointermove", handlePointerMove);
   ui.canvas.addEventListener("pointerup", handlePointerUp);
-  ui.canvas.addEventListener("pointerleave", handlePointerUp);
+  ui.canvas.addEventListener("pointerleave", (evt) => {
+    if (state.drawing) {
+      state.drawing = false;
+      setStatus("Pointer left the canvas. Restarting challenge.", "error");
+      fetchChallenge();
+    }
+    handlePointerUp(evt);
+  });
   function tick() {
     drawFrame();
     requestAnimationFrame(tick);
@@ -315,26 +311,33 @@ function setupCanvas() {
 
 function setupControls() {
   ui.reloadBtn.addEventListener("click", fetchChallenge);
-  ui.fallbackBtn.addEventListener("click", showSlider);
-  ui.backToLine.addEventListener("click", () => {
-    showLine();
-    fetchChallenge();
-  });
-  ui.sliderReset.addEventListener("click", () => {
-    ui.slider.value = 0;
-    ui.sliderStatus.textContent = "Not solved";
-    ui.sliderStatus.className = "slider-status";
-  });
-  ui.slider.addEventListener("input", () => {
-    const val = Number(ui.slider.value);
-    if (val >= 100) {
-      ui.sliderStatus.textContent = "Slider solved";
-      ui.sliderStatus.className = "slider-status success";
-    } else {
-      ui.sliderStatus.textContent = "Not solved";
-      ui.sliderStatus.className = "slider-status";
-    }
-  });
+}
+
+async function fetchLookahead(x, y, force = false) {
+  const now = performance.now();
+  if (!force && now - state.lastPeekAt < 80) return; // throttle
+  state.lastPeekAt = now;
+  if (!state.challenge) return;
+  try {
+    const res = await fetch(`${API_BASE}/captcha/line/peek`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        challengeId: state.challenge.challengeId,
+        nonce: state.nonce,
+        token: state.token,
+        cursor: [x, y],
+      }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    state.lookahead = data.ahead;
+    state.distanceToEnd = data.distanceToEnd;
+    state.showFinish = Boolean(data.finish);
+    state.finishPoint = data.finish || null;
+  } catch (err) {
+    console.error("peek error", err);
+  }
 }
 
 function init() {

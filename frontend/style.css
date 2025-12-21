@@ -113,26 +113,3 @@ canvas {
   color: var(--muted);
   margin-top: 12px;
 }
-
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-input[type="range"] {
-  flex: 1;
-}
-
-.slider-status {
-  margin-top: 8px;
-  color: var(--muted);
-}
-
-.slider-status.success {
-  color: var(--success);
-}
-
-.slider-status.fail {
-  color: var(--danger);
-}

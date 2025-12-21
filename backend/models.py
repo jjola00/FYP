@@ -15,21 +15,38 @@ class NewChallengeResponse(BaseModel):
     challengeId: str
     ttlMs: int
     expiresAt: float
-    pathSeed: str
-    pathLengthPx: float
-    points: List[List[float]]
-    canvas: dict
-    tolerance: dict
+    nonce: str
+    token: str
+    startPoint: List[float]
+    tolerance: dict  # display hint (rounded)
     targetCompletionMs: int
     trail: dict
+    canvas: dict
+
+
+class PeekRequest(BaseModel):
+    challengeId: str
+    nonce: str
+    token: str
+    cursor: List[float]
+
+
+class PeekResponse(BaseModel):
+    ahead: List[List[float]]
+    behind: List[List[float]]
+    distanceToEnd: float
+    finish: Optional[List[float]] = None
 
 
 class VerifyRequest(BaseModel):
     challengeId: str
+    nonce: str
+    token: str
     sessionId: str
     pointerType: Literal["mouse", "touch", "pen"]
     osFamily: Optional[str] = None
     browserFamily: Optional[str] = None
+    devicePixelRatio: Optional[float] = None
     trajectory: List[TrajectorySample]
 
     @validator("trajectory")
@@ -46,5 +63,7 @@ class VerifyResponse(BaseModel):
     durationMs: float
     ttlExpired: bool
     tooFast: bool
+    behaviouralFlag: bool = Field(False, description="True when behavioural checks (e.g., constant velocity) were tripped but not blocked.")
     newChallengeRecommended: bool
     thresholds: dict
+    expiresAt: float
