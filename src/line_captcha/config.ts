@@ -7,7 +7,7 @@ export const TARGET_COMPLETION_TIME_MS = 3000;
 export const PATH_TRAVEL_PX_RANGE = { min: 200, max: 300 };
 export const MAX_GENTLE_BENDS = 2;
 
-export const CHALLENGE_TTL_MS = 12000; // acceptable range 10–15s
+export const CHALLENGE_TTL_MS = 6000; // shorter TTL for faster sessions
 export const TOO_FAST_THRESHOLD_MS = 1000;
 export const MIN_SAMPLES = 20;
 
