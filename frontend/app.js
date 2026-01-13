@@ -51,6 +51,30 @@ function setTimer(text) {
   ui.timer.textContent = text;
 }
 
+function formatFailureReason(data) {
+  const reason = data?.reason || "unknown";
+  switch (reason) {
+    case "timeout":
+      return "Time expired. Try again.";
+    case "insufficient_samples":
+      return "Trace too short. Keep moving along the line.";
+    case "non_monotonic_time":
+      return "Timing error. Please retry.";
+    case "jump_detected":
+      return "Pointer jumped off the line. Stay on the path.";
+    case "too_fast": {
+      const duration = Math.round(data?.durationMs ?? 0);
+      return `Too fast (${duration}ms). Slow down.`;
+    }
+    case "low_coverage": {
+      const pct = Math.round((data?.coverageRatio ?? 0) * 100);
+      return `Strayed too far (${pct}% on-path). Follow the line more closely.`;
+    }
+    default:
+      return `Failed (${reason}). Try again.`;
+  }
+}
+
 function pointerProfileFromEvent(evt) {
   return evt.pointerType === "mouse" ? "mouse" : "touch";
 }
@@ -223,10 +247,14 @@ async function verifyAttempt() {
     });
     const data = await res.json();
     if (data.passed) {
-      setStatus("Passed.", "success");
+      const msg =
+        data.reason === "success_with_behavioural_flag"
+          ? "Passed (movement flagged; logged for tuning)."
+          : "Passed.";
+      setStatus(msg, "success");
     } else {
-      setStatus("Incorrect. Try again.", "error");
-      await fetchChallenge();
+      setStatus(formatFailureReason(data), "error");
+      setTimeout(fetchChallenge, 1200);
     }
   } catch (err) {
     console.error(err);
