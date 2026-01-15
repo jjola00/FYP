@@ -27,6 +27,9 @@ const state = {
   expiresAtMs: 0,
   timerHandle: null,
   drawing: false,
+  expired: false,
+  solved: false,
+  needsReset: false,
   startTs: 0,
   trajectory: [],
   segments: [],
@@ -53,25 +56,20 @@ function setTimer(text) {
 
 function formatFailureReason(data) {
   const reason = data?.reason || "unknown";
+  console.log("[formatFailureReason] Formatting reason:", reason);
   switch (reason) {
-    case "timeout":
-      return "Time expired. Try again.";
+    case "incomplete":
     case "insufficient_samples":
-      return "Trace too short. Keep moving along the line.";
     case "non_monotonic_time":
-      return "Timing error. Please retry.";
+    case "too_fast":
+      return "Captcha incompleted.";
     case "jump_detected":
-      return "Pointer jumped off the line. Stay on the path.";
-    case "too_fast": {
-      const duration = Math.round(data?.durationMs ?? 0);
-      return `Too fast (${duration}ms). Slow down.`;
-    }
-    case "low_coverage": {
-      const pct = Math.round((data?.coverageRatio ?? 0) * 100);
-      return `Strayed too far (${pct}% on-path). Follow the line more closely.`;
-    }
+    case "low_coverage":
+      return "Strayed too far.";
+    case "timeout":
+      return "Too slow.";
     default:
-      return `Failed (${reason}). Try again.`;
+      return "Captcha incompleted.";
   }
 }
 
@@ -93,13 +91,19 @@ function lineWidthForProfile(profile) {
 function startTimer() {
   if (state.timerHandle) clearInterval(state.timerHandle);
   state.timerHandle = setInterval(() => {
+    if (state.solved || state.needsReset) {
+      clearInterval(state.timerHandle);
+      return;
+    }
     const now = Date.now();
     const remaining = Math.max(0, state.expiresAtMs - now);
-    setTimer(`TTL: ${(remaining / 1000).toFixed(1)}s`);
     if (remaining <= 0) {
-      setStatus("Challenge expired. Fetching new one...", "error");
+      console.log("[startTimer] Timer expired - setting expired flag");
+      state.expired = true;
+      state.drawing = false;
+      state.needsReset = true;
+      setStatus("Too slow.", "error");
       clearInterval(state.timerHandle);
-      fetchChallenge();
     }
   }, 200);
 }
@@ -107,6 +111,9 @@ function startTimer() {
 async function fetchChallenge() {
   setStatus("Loading challenge...");
   state.drawing = false;
+  state.expired = false;
+  state.solved = false;
+  state.needsReset = false;
   state.trajectory = [];
   state.segments = [];
   state.lookahead = [];
@@ -121,6 +128,7 @@ async function fetchChallenge() {
     state.token = data.token;
     state.finishPoint = null;
     state.showFinish = false;
+    setTimer("");
     // prime lookahead around start point
     await fetchLookahead(data.startPoint[0], data.startPoint[1], true);
     startTimer();
@@ -221,12 +229,26 @@ function drawFrame() {
 }
 
 async function verifyAttempt() {
-  if (!state.challenge || state.trajectory.length < 2) return;
-  if (state.trajectory.length < config.minSamples) {
-    setStatus("Trace too short, try again.", "error");
-    fetchChallenge();
+  console.log("[verifyAttempt] Starting verification", {
+    trajectoryLength: state.trajectory.length,
+    minSamples: config.minSamples,
+    expired: state.expired,
+  });
+
+  if (!state.challenge || state.trajectory.length < 2) {
+    console.log("[verifyAttempt] No challenge or insufficient trajectory");
     return;
   }
+
+  if (state.trajectory.length < config.minSamples) {
+    console.log("[verifyAttempt] Insufficient samples - showing incomplete");
+    setStatus("Captcha incompleted.", "error");
+    state.needsReset = true;
+    if (state.timerHandle) clearInterval(state.timerHandle);
+    setTimer("");
+    return;
+  }
+
   setStatus("Verifying...");
   try {
     const body = {
@@ -246,18 +268,30 @@ async function verifyAttempt() {
       body: JSON.stringify(body),
     });
     const data = await res.json();
+    console.log("[verifyAttempt] Backend response:", data);
+
     if (data.passed) {
-      const msg =
-        data.reason === "success_with_behavioural_flag"
-          ? "Passed (movement flagged; logged for tuning)."
-          : "Passed.";
-      setStatus(msg, "success");
+      state.solved = true;
+      if (state.timerHandle) clearInterval(state.timerHandle);
+      setTimer("");
+      setStatus("Passed.", "success");
     } else {
-      setStatus(formatFailureReason(data), "error");
-      setTimeout(fetchChallenge, 1200);
+      if (data.reason === "timeout") {
+        console.log("[verifyAttempt] TTL expired - showing too slow");
+        state.expired = true;
+        state.needsReset = true;
+        if (state.timerHandle) clearInterval(state.timerHandle);
+        setStatus("Too slow.", "error");
+      } else {
+        console.log("[verifyAttempt] Failed with reason:", data.reason);
+        setStatus(formatFailureReason(data), "error");
+        state.needsReset = true;
+        if (state.timerHandle) clearInterval(state.timerHandle);
+        setTimer("");
+      }
     }
   } catch (err) {
-    console.error(err);
+    console.error("[verifyAttempt] Error:", err);
     setStatus("Verification error.", "error");
   }
 }
@@ -265,12 +299,22 @@ async function verifyAttempt() {
 function handlePointerDown(evt) {
   evt.preventDefault();
   if (!state.challenge) return;
-  const now = Date.now();
-  if (now > state.expiresAtMs) {
-    setStatus("Challenge expired. Fetching new one...", "error");
-    fetchChallenge();
+  if (state.solved) {
+    setStatus("Passed. Click New Challenge.", "success");
     return;
   }
+  if (state.needsReset) {
+    console.log("[handlePointerDown] Needs reset, ignoring");
+    return;
+  }
+  const now = Date.now();
+  if (state.expired || now > state.expiresAtMs) {
+    console.log("[handlePointerDown] Already expired before starting");
+    state.expired = true;
+    setStatus("Too slow.", "error");
+    return;
+  }
+  console.log("[handlePointerDown] Starting new trace");
   state.pointerProfile = pointerProfileFromEvent(evt);
   const profile = state.pointerProfile === "mouse" ? "mouse" : "touch";
   const lineWidth = lineWidthForProfile(profile);
@@ -311,6 +355,7 @@ function handlePointerMove(evt) {
 function handlePointerUp(evt) {
   evt.preventDefault();
   if (!state.drawing) return;
+  console.log("[handlePointerUp] Pointer released, trajectory length:", state.trajectory.length);
   ui.canvas.releasePointerCapture(evt.pointerId);
   state.drawing = false;
   verifyAttempt();
@@ -324,11 +369,14 @@ function setupCanvas() {
   ui.canvas.addEventListener("pointerup", handlePointerUp);
   ui.canvas.addEventListener("pointerleave", (evt) => {
     if (state.drawing) {
+      console.log("[pointerleave] Pointer left canvas while drawing");
+      ui.canvas.releasePointerCapture(evt.pointerId);
       state.drawing = false;
-      setStatus("Pointer left the canvas. Restarting challenge.", "error");
-      fetchChallenge();
+      state.needsReset = true;
+      if (state.timerHandle) clearInterval(state.timerHandle);
+      setTimer("");
+      setStatus("Strayed too far.", "error");
     }
-    handlePointerUp(evt);
   });
   function tick() {
     drawFrame();

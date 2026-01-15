@@ -1,4 +1,5 @@
 import json
+import math
 import random
 import time
 import uuid
@@ -236,6 +237,10 @@ def verify_attempt(payload: models.VerifyRequest):
 
     duration_ms = payload.trajectory[-1].t - payload.trajectory[0].t
     too_fast = duration_ms < config.TOO_FAST_THRESHOLD_MS
+    end_point = path_points[-1]
+    last_sample = payload.trajectory[-1]
+    end_distance = math.hypot(last_sample.x - end_point[0], last_sample.y - end_point[1])
+    end_reached = end_distance <= tolerance_px
 
     mean_speed, max_speed = _speed_stats(payload.trajectory)
     pause_count, pause_durations = _pause_stats(payload.trajectory)
@@ -261,10 +266,7 @@ def verify_attempt(payload: models.VerifyRequest):
             accel_flag = True
 
     behavioural_flag = speed_const_flag or accel_flag
-    if ttl_expired:
-        reason = "timeout"
-        passed = False
-    elif not min_samples:
+    if not min_samples:
         reason = "insufficient_samples"
         passed = False
     elif not monotonic:
@@ -273,14 +275,20 @@ def verify_attempt(payload: models.VerifyRequest):
     elif not jumps_ok:
         reason = "jump_detected"
         passed = False
-    elif too_fast:
-        reason = "too_fast"
-        passed = False
     elif coverage_len_ratio < config.REQUIRED_COVERAGE_RATIO:
         reason = "low_coverage"
         passed = False
     elif coverage_ratio < config.REQUIRED_COVERAGE_RATIO:
         reason = "low_coverage"
+        passed = False
+    elif not end_reached:
+        reason = "incomplete"
+        passed = False
+    elif ttl_expired:
+        reason = "timeout"
+        passed = False
+    elif too_fast:
+        reason = "too_fast"
         passed = False
     else:
         # Behavioural signals are logged but not blocking until thresholds are tuned.
