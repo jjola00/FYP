@@ -1,0 +1,8 @@
+Attempts analyzed: 200
+Pass rate: 0/200 (0.0%)
+Median duration (all): 5792 ms
+Median coverage (all): 100.0%
+Failure reasons:
+  incomplete: 200
+By pointer type:
+  touch: 0/200 (0.0%), median 5792 ms

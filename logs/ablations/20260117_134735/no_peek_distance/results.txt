@@ -1,0 +1,35 @@
+Bot test run: 2026-01-17T14:57:15Z
+Base URL: http://localhost:8103
+Attempts per variant: 200
+Max duration per attempt: 5500ms
+
+## baseline
+attempts=200 passed=44 pass_rate=22.0%
+reasons:
+  no_curvature_adaptation: 123
+  success: 44
+  behavioural: 33
+
+## jitter_1_5
+attempts=200 passed=0 pass_rate=0.0%
+reasons:
+  incomplete: 200
+
+## slow_step_24
+attempts=200 passed=76 pass_rate=38.0%
+reasons:
+  no_curvature_adaptation: 119
+  success: 76
+  behavioural: 5
+
+## curvature_aware_slow
+attempts=200 passed=72 pass_rate=36.0%
+reasons:
+  no_curvature_adaptation: 128
+  success: 72
+
+## touch_jitter_1_5
+attempts=200 passed=0 pass_rate=0.0%
+reasons:
+  incomplete: 200
+

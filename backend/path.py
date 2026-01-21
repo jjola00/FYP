@@ -107,6 +107,24 @@ def lookahead(points: List[Point], cursor: Point, ahead: float = 60.0, behind: f
     return _sample_between(points, cums, start, end)
 
 
+def position_and_distance(points: List[Point], cursor: Point) -> Tuple[float, float]:
+    """
+    Return the cursor's projection position along the path and its distance to the path.
+    """
+    cums = _cumulative_lengths(points)
+    pos, proj = _nearest_position(points, cums, cursor)
+    dist = math.hypot(cursor[0] - proj[0], cursor[1] - proj[1])
+    return pos, dist
+
+
+def position_along_path(points: List[Point], cursor: Point) -> float:
+    """
+    Return the cursor's projection position along the path.
+    """
+    pos, _ = position_and_distance(points, cursor)
+    return pos
+
+
 def generate_path(seed: str) -> Tuple[List[Point], float]:
     """
     Generate a smooth cubic path with 1–2 gentle bends and target length 200–300 px.
@@ -177,3 +195,35 @@ def distance_to_end(points: List[Point], cursor: Point) -> float:
     cums = _cumulative_lengths(points)
     pos, _ = _nearest_position(points, cums, cursor)
     return max(0.0, cums[-1] - pos)
+
+
+def cumulative_lengths(points: List[Point]) -> List[float]:
+    return _cumulative_lengths(points)
+
+
+def index_at_position(cums: List[float], pos: float) -> int:
+    for i, value in enumerate(cums):
+        if value >= pos:
+            return max(0, i)
+    return max(0, len(cums) - 1)
+
+
+def curvature_profile(points: List[Point]) -> List[float]:
+    if len(points) < 3:
+        return [0.0 for _ in points]
+    curvatures = [0.0 for _ in points]
+    for i in range(1, len(points) - 1):
+        x1, y1 = points[i - 1]
+        x2, y2 = points[i]
+        x3, y3 = points[i + 1]
+        ax, ay = x2 - x1, y2 - y1
+        bx, by = x3 - x2, y3 - y2
+        len_a = math.hypot(ax, ay)
+        len_b = math.hypot(bx, by)
+        if len_a == 0 or len_b == 0:
+            curvatures[i] = 0.0
+            continue
+        dot = ax * bx + ay * by
+        cos_theta = max(-1.0, min(1.0, dot / (len_a * len_b)))
+        curvatures[i] = math.acos(cos_theta)
+    return curvatures

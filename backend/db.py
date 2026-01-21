@@ -29,6 +29,9 @@ def init_db() -> None:
                 tolerance_touch REAL,
                 jitter_mouse REAL,
                 jitter_touch REAL,
+                peek_pos REAL DEFAULT 0,
+                last_peek_at REAL,
+                peek_count INTEGER DEFAULT 0,
                 nonce_used INTEGER DEFAULT 0,
                 created_at REAL NOT NULL
             )
@@ -63,6 +66,12 @@ def init_db() -> None:
                 speed_const_flag INTEGER,
                 accel_flag INTEGER,
                 behavioural_flag INTEGER,
+                speed_violation INTEGER,
+                bot_score REAL,
+                regularity_dt_cv REAL,
+                regularity_dd_cv REAL,
+                curvature_var_low REAL,
+                curvature_var_high REAL,
                 trajectory_json TEXT,
                 created_at REAL NOT NULL
             )
@@ -81,6 +90,9 @@ def init_db() -> None:
             "ALTER TABLE challenges ADD COLUMN tolerance_touch REAL",
             "ALTER TABLE challenges ADD COLUMN jitter_mouse REAL",
             "ALTER TABLE challenges ADD COLUMN jitter_touch REAL",
+            "ALTER TABLE challenges ADD COLUMN peek_pos REAL DEFAULT 0",
+            "ALTER TABLE challenges ADD COLUMN last_peek_at REAL",
+            "ALTER TABLE challenges ADD COLUMN peek_count INTEGER DEFAULT 0",
             "ALTER TABLE challenges ADD COLUMN nonce_used INTEGER DEFAULT 0",
         ]:
             try:
@@ -95,6 +107,12 @@ def init_db() -> None:
             "ALTER TABLE attempt_logs ADD COLUMN speed_const_flag INTEGER",
             "ALTER TABLE attempt_logs ADD COLUMN accel_flag INTEGER",
             "ALTER TABLE attempt_logs ADD COLUMN behavioural_flag INTEGER",
+            "ALTER TABLE attempt_logs ADD COLUMN speed_violation INTEGER",
+            "ALTER TABLE attempt_logs ADD COLUMN bot_score REAL",
+            "ALTER TABLE attempt_logs ADD COLUMN regularity_dt_cv REAL",
+            "ALTER TABLE attempt_logs ADD COLUMN regularity_dd_cv REAL",
+            "ALTER TABLE attempt_logs ADD COLUMN curvature_var_low REAL",
+            "ALTER TABLE attempt_logs ADD COLUMN curvature_var_high REAL",
         ]:
             try:
                 conn.execute(col_def)
@@ -129,10 +147,13 @@ def save_challenge(
                 tolerance_touch,
                 jitter_mouse,
                 jitter_touch,
+                peek_pos,
+                last_peek_at,
+                peek_count,
                 nonce_used,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             """,
             (
                 challenge_id,
@@ -145,6 +166,9 @@ def save_challenge(
                 tolerance_touch,
                 jitter_mouse,
                 jitter_touch,
+                0.0,
+                None,
+                0,
                 time.time(),
             ),
         )
@@ -190,9 +214,15 @@ def save_attempt(log: Dict[str, Any]) -> None:
                 speed_const_flag,
                 accel_flag,
                 behavioural_flag,
+                speed_violation,
+                bot_score,
+                regularity_dt_cv,
+                regularity_dd_cv,
+                curvature_var_low,
+                curvature_var_high,
                 trajectory_json,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 log["attempt_id"],
@@ -221,6 +251,12 @@ def save_attempt(log: Dict[str, Any]) -> None:
                 1 if log.get("speed_const_flag") else 0,
                 1 if log.get("accel_flag") else 0,
                 1 if log.get("behavioural_flag") else 0,
+                1 if log.get("speed_violation") else 0,
+                log.get("bot_score"),
+                log.get("regularity_dt_cv"),
+                log.get("regularity_dd_cv"),
+                log.get("curvature_var_low"),
+                log.get("curvature_var_high"),
                 json.dumps(log.get("trajectory") or []),
                 time.time(),
             ),
@@ -232,5 +268,19 @@ def mark_challenge_used(challenge_id: str) -> None:
     with _get_conn() as conn:
         conn.execute(
             "UPDATE challenges SET nonce_used = 1 WHERE id = ?", (challenge_id,)
+        )
+        conn.commit()
+
+
+def update_peek_progress(
+    challenge_id: str,
+    peek_pos: float,
+    last_peek_at: float,
+    peek_count: int,
+) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE challenges SET peek_pos = ?, last_peek_at = ?, peek_count = ? WHERE id = ?",
+            (peek_pos, last_peek_at, peek_count, challenge_id),
         )
         conn.commit()

@@ -1,0 +1,12 @@
+Attempts analyzed: 200
+Pass rate: 50/200 (25.0%)
+Median solve time (passes): 1944 ms
+Median duration (all): 3768 ms
+Median coverage (all): 100.0%
+Failure reasons:
+  incomplete: 100
+  no_curvature_adaptation: 38
+  behavioural: 12
+By pointer type:
+  mouse: 50/140 (35.7%), median 1968 ms
+  touch: 0/60 (0.0%), median 5808 ms

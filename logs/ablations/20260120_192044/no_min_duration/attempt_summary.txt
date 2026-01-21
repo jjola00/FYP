@@ -1,0 +1,10 @@
+Attempts analyzed: 200
+Pass rate: 1/200 (0.5%)
+Median solve time (passes): 3860 ms
+Median duration (all): 5824 ms
+Median coverage (all): 100.0%
+Failure reasons:
+  incomplete: 199
+By pointer type:
+  mouse: 1/1 (100.0%), median 3860 ms
+  touch: 0/199 (0.0%), median 5824 ms

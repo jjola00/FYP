@@ -1,0 +1,28 @@
+Bot test run: 2026-01-16T18:38:00Z
+Base URL: http://localhost:8102
+Attempts per variant: 20
+Max duration per attempt: 5500ms
+
+## baseline
+attempts=20 passed=5 pass_rate=25.0%
+reasons:
+  no_curvature_adaptation: 12
+  success: 5
+  behavioural: 3
+
+## jitter_1_5
+attempts=20 passed=0 pass_rate=0.0%
+reasons:
+  incomplete: 20
+
+## slow_step_24
+attempts=20 passed=10 pass_rate=50.0%
+reasons:
+  no_curvature_adaptation: 10
+  success: 10
+
+## touch_jitter_1_5
+attempts=20 passed=0 pass_rate=0.0%
+reasons:
+  incomplete: 20
+

@@ -1,0 +1,16 @@
+Findings from bot evaluations (ephemeral line CAPTCHA)
+- Oracle-assisted baseline bots still pass at moderate rates even with rate limits and behavioural gating.
+- Jittered bots fail primarily due to incomplete traces (solver quality issue, not a security win).
+- Slow, careful bots (uniform steps, low speed) remain the hardest class to block without harming users.
+- This mirrors prior findings that purely behavioural thresholds can be bypassed by careful automation.
+
+Refinement added: curvature-behavior coupling
+- New server-side check evaluates whether user motion adapts to path difficulty.
+- Path curvature is computed along the polyline; trace samples are split into low- vs high-curvature regions.
+- Expected human pattern: higher speed variance and more corrections at high-curvature segments.
+- Bot pattern: uniform behavior across straight and curved regions.
+- Fail condition: high-curvature variance does not exceed low-curvature variance by a minimum ratio.
+
+Research framing
+- The results show naive and noisy bots fail, but careful slow bots survive, consistent with reCAPTCHA v3 bypass literature.
+- Curvature-behavior coupling is a second-order signal aimed at intent, not raw speed, reducing false rejects.

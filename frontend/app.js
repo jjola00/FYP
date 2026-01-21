@@ -62,6 +62,11 @@ function formatFailureReason(data) {
     case "insufficient_samples":
     case "non_monotonic_time":
     case "too_fast":
+    case "non_monotonic_path":
+    case "speed_violation":
+    case "behavioural":
+    case "regularity":
+    case "no_curvature_adaptation":
       return "Captcha incompleted.";
     case "jump_detected":
     case "low_coverage":
@@ -391,7 +396,7 @@ function setupControls() {
 
 async function fetchLookahead(x, y, force = false) {
   const now = performance.now();
-  if (!force && now - state.lastPeekAt < 80) return; // throttle
+  if (!force && now - state.lastPeekAt < 100) return; // throttle
   state.lastPeekAt = now;
   if (!state.challenge) return;
   try {

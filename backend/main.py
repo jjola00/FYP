@@ -59,6 +59,19 @@ def _pause_stats(traj: List[models.TrajectorySample], pause_gap_ms: int = 150):
     return count, pauses
 
 
+def _pointer_behaviour(pointer_type: str) -> Dict[str, float]:
+    key = "mouse" if pointer_type == "mouse" else "touch"
+    return config.POINTER_BEHAVIOR.get(key, {})
+
+
+def _percentile(values: List[float], pct: float) -> float:
+    if not values:
+        return 0.0
+    values_sorted = sorted(values)
+    idx = int(pct * (len(values_sorted) - 1))
+    return values_sorted[max(0, min(idx, len(values_sorted) - 1))]
+
+
 @app.post("/captcha/line/new", response_model=models.NewChallengeResponse)
 def new_challenge() -> models.NewChallengeResponse:
     challenge_id = uuid.uuid4().hex
@@ -144,7 +157,59 @@ def peek_path(payload: models.PeekRequest):
         raise fastapi.HTTPException(status_code=410, detail="Challenge expired")
 
     points = json.loads(challenge_row["points_json"])
-    ahead_polyline = path.lookahead(points, (payload.cursor[0], payload.cursor[1]))
+    now = time.time()
+    last_peek_at = float(challenge_row["last_peek_at"]) if challenge_row["last_peek_at"] else None
+    if config.ENFORCE_PEEK_RATE and last_peek_at is not None:
+        since_ms = (now - last_peek_at) * 1000.0
+        if since_ms < config.PEEK_MIN_INTERVAL_MS:
+            raise fastapi.HTTPException(status_code=429, detail="Peek rate limit")
+
+    peek_count = int(challenge_row["peek_count"]) if "peek_count" in row_keys and challenge_row["peek_count"] is not None else 0
+    if config.ENFORCE_PEEK_BUDGET and peek_count >= config.PEEK_MAX_COUNT:
+        raise fastapi.HTTPException(status_code=429, detail="Peek budget exceeded")
+
+    cursor = (payload.cursor[0], payload.cursor[1])
+    pos, dist = path.position_and_distance(points, cursor)
+    last_pos = float(challenge_row["peek_pos"]) if "peek_pos" in row_keys and challenge_row["peek_pos"] is not None else 0.0
+
+    if config.ENFORCE_PEEK_DISTANCE:
+        tol_mouse = (
+            float(challenge_row["tolerance_mouse"])
+            if "tolerance_mouse" in row_keys and challenge_row["tolerance_mouse"] is not None
+            else config.POINTER_CONFIG["mouse"]["tolerance_px"]
+        )
+        tol_touch = (
+            float(challenge_row["tolerance_touch"])
+            if "tolerance_touch" in row_keys and challenge_row["tolerance_touch"] is not None
+            else config.POINTER_CONFIG["touch"]["tolerance_px"]
+        )
+        max_tol = max(tol_mouse, tol_touch)
+        if dist > max_tol * config.PEEK_DISTANCE_FACTOR:
+            db.update_peek_progress(payload.challengeId, last_pos, now, peek_count + 1)
+            return models.PeekResponse(
+                ahead=[],
+                behind=[],
+                distanceToEnd=float(f"{path.distance_to_end(points, cursor):.2f}"),
+                finish=None,
+            )
+
+    if config.ENFORCE_PEEK_STATE and last_peek_at is not None:
+        delta_s = max(0.001, now - last_peek_at)
+        max_advance = config.PEEK_MAX_ADVANCE_PX_PER_S * delta_s + config.PEEK_ADVANCE_MARGIN_PX
+        if pos > last_pos + max_advance:
+            raise fastapi.HTTPException(status_code=400, detail="Peek jump too far")
+        if pos < last_pos - config.PROGRESS_BACKTRACK_PX:
+            raise fastapi.HTTPException(status_code=400, detail="Peek backtrack too far")
+
+    new_pos = max(last_pos, pos)
+    db.update_peek_progress(payload.challengeId, new_pos, now, peek_count + 1)
+
+    ahead_polyline = path.lookahead(
+        points,
+        cursor,
+        ahead=config.PEEK_AHEAD_PX,
+        behind=config.PEEK_BEHIND_PX,
+    )
     distance_to_end = path.distance_to_end(points, (payload.cursor[0], payload.cursor[1]))
     finish_point = points[-1] if distance_to_end <= config.FINISH_REVEAL_PX else None
     return models.PeekResponse(
@@ -194,17 +259,39 @@ def verify_attempt(payload: models.VerifyRequest):
     if payload.devicePixelRatio and payload.devicePixelRatio >= 2:
         tolerance_px *= 1.1
     tolerance_jitter = tolerance_px - base_tolerance
+    behaviour = _pointer_behaviour(payload.pointerType)
+    speed_const_ratio = behaviour.get("speed_const_ratio", config.SPEED_CONSTANTITY_RATIO)
+    max_accel = behaviour.get("max_accel_px_per_s2", config.MAX_ACCEL_PX_PER_S2)
+    max_speed_limit = behaviour.get("max_speed_px_per_s", config.MAX_SPEED_PX_PER_S)
+    max_avg_speed_limit = behaviour.get("max_avg_speed_px_per_s", config.MAX_AVG_SPEED_PX_PER_S)
+    max_backtrack_ratio = behaviour.get("max_backtrack_sample_ratio", config.MAX_BACKTRACK_SAMPLE_RATIO)
+    min_accel_sign_changes = behaviour.get("min_accel_sign_changes", config.MIN_ACCEL_SIGN_CHANGES)
+    min_dt_cv = behaviour.get("min_dt_cv", 0.0)
+    min_dd_cv = behaviour.get("min_dd_cv", 0.0)
+    curvature_var_ratio_min = behaviour.get("curvature_var_ratio_min", config.CURVATURE_VAR_RATIO_MIN)
+    curvature_min_samples = int(behaviour.get("curvature_min_samples", config.CURVATURE_MIN_SAMPLES))
 
     path_points = json.loads(challenge_row["points_json"])
+    cums = path.cumulative_lengths(path_points)
+    curvatures = path.curvature_profile(path_points)
+    curvature_values = [c for c in curvatures if c > 0]
+    curvature_low = _percentile(curvature_values, config.CURVATURE_LOW_PCTL) if curvature_values else None
+    curvature_high = _percentile(curvature_values, config.CURVATURE_HIGH_PCTL) if curvature_values else None
     coverage_hits = 0
     monotonic = True
     jumps_ok = True
     min_samples = len(payload.trajectory) >= config.MIN_SAMPLES
+    backtrack_samples = 0
     last_t = payload.trajectory[0].t
     total_seg_len = 0.0
     covered_seg_len = 0.0
     speeds: List[float] = []
     accels: List[float] = []
+    speed_low: List[float] = []
+    speed_high: List[float] = []
+    dt_samples: List[float] = []
+    dd_samples: List[float] = []
+    last_pos = None
     for idx, sample in enumerate(payload.trajectory):
         if idx > 0 and sample.t <= last_t:
             monotonic = False
@@ -216,9 +303,13 @@ def verify_attempt(payload: models.VerifyRequest):
                 jumps_ok = False
                 break
             total_seg_len += jump_dist
-            dt_s = max(0.001, (sample.t - prev.t) / 1000.0)
+            dt_ms = sample.t - prev.t
+            dt_s = max(0.001, dt_ms / 1000.0)
             speed = jump_dist / dt_s
             speeds.append(speed)
+            if dt_ms > 0:
+                dt_samples.append(float(dt_ms))
+            dd_samples.append(float(jump_dist))
             if len(speeds) > 1:
                 accels.append((speeds[-1] - speeds[-2]) / dt_s)
             if (
@@ -226,6 +317,21 @@ def verify_attempt(payload: models.VerifyRequest):
                 and path.min_distance_to_polyline((prev.x, prev.y), path_points) <= tolerance_px
             ):
                 covered_seg_len += jump_dist
+        pos = path.position_along_path(path_points, (sample.x, sample.y))
+        if curvature_low is not None and curvature_high is not None and idx > 0:
+            idx_pos = path.index_at_position(cums, pos)
+            curvature = curvatures[idx_pos]
+            if curvature >= curvature_high:
+                speed_high.append(speeds[-1])
+            elif curvature <= curvature_low:
+                speed_low.append(speeds[-1])
+        if last_pos is None:
+            last_pos = pos
+        else:
+            if pos + config.PROGRESS_BACKTRACK_PX < last_pos:
+                backtrack_samples += 1
+            else:
+                last_pos = max(last_pos, pos)
         last_t = sample.t
 
     for sample in payload.trajectory:
@@ -234,9 +340,17 @@ def verify_attempt(payload: models.VerifyRequest):
             coverage_hits += 1
     coverage_ratio = coverage_hits / len(payload.trajectory)
     coverage_len_ratio = covered_seg_len / total_seg_len if total_seg_len > 0 else 0.0
+    backtrack_ratio = backtrack_samples / len(payload.trajectory)
+    progress_ok = True
+    if config.ENFORCE_MONOTONIC_PATH:
+        progress_ok = backtrack_ratio <= max_backtrack_ratio
 
     duration_ms = payload.trajectory[-1].t - payload.trajectory[0].t
-    too_fast = duration_ms < config.TOO_FAST_THRESHOLD_MS
+    min_duration_ms = config.TOO_FAST_THRESHOLD_MS
+    if config.ENFORCE_MIN_DURATION:
+        path_length = float(challenge_row["path_length"])
+        min_duration_ms = max(min_duration_ms, (path_length / max_avg_speed_limit) * 1000.0)
+    too_fast = duration_ms < min_duration_ms
     end_point = path_points[-1]
     last_sample = payload.trajectory[-1]
     end_distance = math.hypot(last_sample.x - end_point[0], last_sample.y - end_point[1])
@@ -254,19 +368,81 @@ def verify_attempt(payload: models.VerifyRequest):
 
     speed_const_flag = False
     accel_flag = False
+    speed_violation = False
+    accel_sign_change_flag = False
+    regularity_flag = False
+    regularity_dt_cv = None
+    regularity_dd_cv = None
+    curvature_flag = False
+    curvature_var_low = None
+    curvature_var_high = None
     if speeds and mean_speed > 0:
         mean_s = sum(speeds) / len(speeds)
         var_s = sum((s - mean_s) ** 2 for s in speeds) / len(speeds)
         std_s = var_s ** 0.5
-        if std_s / mean_s < config.SPEED_CONSTANTITY_RATIO:
+        if std_s / mean_s < speed_const_ratio:
             speed_const_flag = True
     if accels:
-        max_accel = max(abs(a) for a in accels)
-        if max_accel > config.MAX_ACCEL_PX_PER_S2:
+        max_accel_seen = max(abs(a) for a in accels)
+        if max_accel_seen > max_accel:
             accel_flag = True
+        prev_sign = 0
+        sign_changes = 0
+        for accel in accels:
+            sign = 1 if accel > 0 else -1 if accel < 0 else 0
+            if sign and prev_sign and sign != prev_sign:
+                sign_changes += 1
+            if sign:
+                prev_sign = sign
+        if len(accels) >= 3 and sign_changes < min_accel_sign_changes:
+            accel_sign_change_flag = True
+    if config.ENFORCE_SPEED_LIMITS and max_speed > max_speed_limit:
+        speed_violation = True
+    if dt_samples and dd_samples:
+        mean_dt = sum(dt_samples) / len(dt_samples)
+        mean_dd = sum(dd_samples) / len(dd_samples)
+        if mean_dt > 0:
+            var_dt = sum((d - mean_dt) ** 2 for d in dt_samples) / len(dt_samples)
+            regularity_dt_cv = (var_dt ** 0.5) / mean_dt
+        if mean_dd > 0:
+            var_dd = sum((d - mean_dd) ** 2 for d in dd_samples) / len(dd_samples)
+            regularity_dd_cv = (var_dd ** 0.5) / mean_dd
+        if (
+            regularity_dt_cv is not None
+            and regularity_dd_cv is not None
+            and regularity_dt_cv < min_dt_cv
+            and regularity_dd_cv < min_dd_cv
+        ):
+            regularity_flag = True
 
-    behavioural_flag = speed_const_flag or accel_flag
-    if not min_samples:
+    if speed_low and speed_high and len(speed_low) >= curvature_min_samples and len(speed_high) >= curvature_min_samples:
+        mean_low = sum(speed_low) / len(speed_low)
+        mean_high = sum(speed_high) / len(speed_high)
+        if mean_low > 0:
+            curvature_var_low = sum((s - mean_low) ** 2 for s in speed_low) / len(speed_low)
+        if mean_high > 0:
+            curvature_var_high = sum((s - mean_high) ** 2 for s in speed_high) / len(speed_high)
+        if curvature_var_low is not None and curvature_var_high is not None:
+            if curvature_var_low <= 1e-6 and curvature_var_high <= 1e-6:
+                curvature_flag = True
+            elif curvature_var_high <= curvature_var_low * curvature_var_ratio_min:
+                curvature_flag = True
+
+    behavioural_flag = speed_const_flag or accel_flag or accel_sign_change_flag
+    bot_score = (
+        (1 if speed_const_flag else 0)
+        + (1 if accel_flag else 0)
+        + (1 if accel_sign_change_flag else 0)
+        + (1 if speed_violation else 0)
+        + (1 if regularity_flag else 0)
+        + (1 if curvature_flag else 0)
+        + (1 if not progress_ok else 0)
+        + (1 if too_fast else 0)
+    )
+    if ttl_expired:
+        reason = "timeout"
+        passed = False
+    elif not min_samples:
         reason = "insufficient_samples"
         passed = False
     elif not monotonic:
@@ -275,24 +451,35 @@ def verify_attempt(payload: models.VerifyRequest):
     elif not jumps_ok:
         reason = "jump_detected"
         passed = False
+    elif config.ENFORCE_MONOTONIC_PATH and not progress_ok:
+        reason = "non_monotonic_path"
+        passed = False
+    elif config.ENFORCE_SPEED_LIMITS and speed_violation:
+        reason = "speed_violation"
+        passed = False
+    elif not end_reached:
+        reason = "incomplete"
+        passed = False
     elif coverage_len_ratio < config.REQUIRED_COVERAGE_RATIO:
         reason = "low_coverage"
         passed = False
     elif coverage_ratio < config.REQUIRED_COVERAGE_RATIO:
         reason = "low_coverage"
         passed = False
-    elif not end_reached:
-        reason = "incomplete"
-        passed = False
-    elif ttl_expired:
-        reason = "timeout"
-        passed = False
     elif too_fast:
         reason = "too_fast"
         passed = False
+    elif config.ENFORCE_REGULARITY and regularity_flag:
+        reason = "regularity"
+        passed = False
+    elif config.ENFORCE_CURVATURE_ADAPTATION and curvature_flag:
+        reason = "no_curvature_adaptation"
+        passed = False
+    elif config.ENFORCE_BEHAVIOURAL and behavioural_flag:
+        reason = "behavioural"
+        passed = False
     else:
-        # Behavioural signals are logged but not blocking until thresholds are tuned.
-        reason = "success" if not behavioural_flag else "success_with_behavioural_flag"
+        reason = "success"
         passed = True
 
     db.save_attempt(
@@ -323,6 +510,12 @@ def verify_attempt(payload: models.VerifyRequest):
             "speed_const_flag": speed_const_flag,
             "accel_flag": accel_flag,
             "behavioural_flag": behavioural_flag,
+            "speed_violation": speed_violation,
+            "bot_score": bot_score,
+            "regularity_dt_cv": regularity_dt_cv,
+            "regularity_dd_cv": regularity_dd_cv,
+            "curvature_var_low": curvature_var_low,
+            "curvature_var_high": curvature_var_high,
             "trajectory": [s.dict() for s in payload.trajectory],
         }
     )
