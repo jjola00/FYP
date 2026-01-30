@@ -277,6 +277,11 @@ def verify_attempt(payload: models.VerifyRequest):
     curvature_values = [c for c in curvatures if c > 0]
     curvature_low = _percentile(curvature_values, config.CURVATURE_LOW_PCTL) if curvature_values else None
     curvature_high = _percentile(curvature_values, config.CURVATURE_HIGH_PCTL) if curvature_values else None
+    curvature_contrast_rad = (
+        (curvature_high - curvature_low)
+        if curvature_low is not None and curvature_high is not None
+        else None
+    )
     coverage_hits = 0
     monotonic = True
     jumps_ok = True
@@ -292,6 +297,7 @@ def verify_attempt(payload: models.VerifyRequest):
     dt_samples: List[float] = []
     dd_samples: List[float] = []
     last_pos = None
+    max_jump_px = max(config.CANVAS_WIDTH_PX, config.CANVAS_HEIGHT_PX) * 0.75
     for idx, sample in enumerate(payload.trajectory):
         if idx > 0 and sample.t <= last_t:
             monotonic = False
@@ -299,7 +305,8 @@ def verify_attempt(payload: models.VerifyRequest):
         if idx > 0:
             prev = payload.trajectory[idx - 1]
             jump_dist = ((sample.x - prev.x) ** 2 + (sample.y - prev.y) ** 2) ** 0.5
-            if jump_dist > tolerance_px * 2:
+            # Only treat extremely large discontinuities as invalid; pointer events can be sparse/coalesced.
+            if jump_dist > max_jump_px:
                 jumps_ok = False
                 break
             total_seg_len += jump_dist
@@ -340,6 +347,10 @@ def verify_attempt(payload: models.VerifyRequest):
             coverage_hits += 1
     coverage_ratio = coverage_hits / len(payload.trajectory)
     coverage_len_ratio = covered_seg_len / total_seg_len if total_seg_len > 0 else 0.0
+    coverage_ok = (
+        coverage_ratio >= config.REQUIRED_COVERAGE_RATIO
+        or coverage_len_ratio >= config.REQUIRED_COVERAGE_RATIO
+    )
     backtrack_ratio = backtrack_samples / len(payload.trajectory)
     progress_ok = True
     if config.ENFORCE_MONOTONIC_PATH:
@@ -365,6 +376,13 @@ def verify_attempt(payload: models.VerifyRequest):
     if deviations:
         deviation_stats["mean"] = sum(deviations) / len(deviations)
         deviation_stats["max"] = max(deviations)
+
+    too_perfect_flag = False
+    if deviation_stats["mean"] is not None and deviation_stats["max"] is not None:
+        min_mean_dev = max(0.25, tolerance_px * config.MIN_DEVIATION_MEAN_FRAC)
+        min_max_dev = max(0.8, tolerance_px * config.MIN_DEVIATION_MAX_FRAC)
+        if deviation_stats["mean"] < min_mean_dev and deviation_stats["max"] < min_max_dev:
+            too_perfect_flag = True
 
     speed_const_flag = False
     accel_flag = False
@@ -394,7 +412,8 @@ def verify_attempt(payload: models.VerifyRequest):
                 sign_changes += 1
             if sign:
                 prev_sign = sign
-        if len(accels) >= 3 and sign_changes < min_accel_sign_changes:
+        # Only enforce "sign change" expectations when speed is suspiciously constant.
+        if len(accels) >= 3 and sign_changes < min_accel_sign_changes and speed_const_flag:
             accel_sign_change_flag = True
     if config.ENFORCE_SPEED_LIMITS and max_speed > max_speed_limit:
         speed_violation = True
@@ -407,28 +426,74 @@ def verify_attempt(payload: models.VerifyRequest):
         if mean_dd > 0:
             var_dd = sum((d - mean_dd) ** 2 for d in dd_samples) / len(dd_samples)
             regularity_dd_cv = (var_dd ** 0.5) / mean_dd
-        if (
-            regularity_dt_cv is not None
-            and regularity_dd_cv is not None
-            and regularity_dt_cv < min_dt_cv
-            and regularity_dd_cv < min_dd_cv
-        ):
-            regularity_flag = True
+        if regularity_dt_cv is not None and regularity_dd_cv is not None:
+            # Only treat as bot-like when BOTH timing and step distance are highly regular.
+            # (Pointer event timing can be fairly stable for real users.)
+            if regularity_dt_cv < min_dt_cv and regularity_dd_cv < min_dd_cv:
+                regularity_flag = True
 
-    if speed_low and speed_high and len(speed_low) >= curvature_min_samples and len(speed_high) >= curvature_min_samples:
+    curvature_check_applied = False
+    curvature_check_inconclusive = True
+    curvature_slowdown_ratio = None
+    curvature_cv_low = None
+    curvature_cv_high = None
+    curvature_mean_low = None
+    curvature_mean_high = None
+    if (
+        speed_low
+        and speed_high
+        and len(speed_low) >= curvature_min_samples
+        and len(speed_high) >= curvature_min_samples
+        and curvature_contrast_rad is not None
+        and curvature_contrast_rad >= config.CURVATURE_CONTRAST_MIN_RAD
+    ):
+        curvature_check_applied = True
         mean_low = sum(speed_low) / len(speed_low)
         mean_high = sum(speed_high) / len(speed_high)
+        curvature_mean_low = mean_low
+        curvature_mean_high = mean_high
         if mean_low > 0:
             curvature_var_low = sum((s - mean_low) ** 2 for s in speed_low) / len(speed_low)
         if mean_high > 0:
             curvature_var_high = sum((s - mean_high) ** 2 for s in speed_high) / len(speed_high)
         if curvature_var_low is not None and curvature_var_high is not None:
-            if curvature_var_low <= 1e-6 and curvature_var_high <= 1e-6:
-                curvature_flag = True
-            elif curvature_var_high <= curvature_var_low * curvature_var_ratio_min:
-                curvature_flag = True
+            # Use CVs for scale invariance; then require either slowdown OR increased variability on curves.
+            std_low = max(0.0, curvature_var_low) ** 0.5
+            std_high = max(0.0, curvature_var_high) ** 0.5
+            if mean_low > 0:
+                curvature_cv_low = std_low / mean_low
+            if mean_high > 0:
+                curvature_cv_high = std_high / mean_high
+            if mean_high > 0 and mean_low > 0:
+                curvature_slowdown_ratio = mean_low / mean_high
 
-    behavioural_flag = speed_const_flag or accel_flag or accel_sign_change_flag
+            if curvature_slowdown_ratio is not None and curvature_slowdown_ratio >= config.CURVATURE_SLOWDOWN_RATIO_MIN:
+                curvature_check_inconclusive = False
+                curvature_flag = False
+            # Small slowdown is common even for smooth humans; don't block on weak evidence.
+            elif curvature_slowdown_ratio is not None and curvature_slowdown_ratio >= config.CURVATURE_NO_SLOWDOWN_RATIO_MAX:
+                curvature_check_inconclusive = True
+                curvature_flag = False
+            elif curvature_cv_low is not None and curvature_cv_high is not None:
+                # With little/no slowdown, require increased variability on curves.
+                if (
+                    curvature_cv_low <= config.CURVATURE_CV_EPS
+                    and curvature_cv_high <= config.CURVATURE_CV_EPS
+                ):
+                    curvature_check_inconclusive = False
+                    curvature_flag = True
+                elif curvature_cv_high <= curvature_cv_low * curvature_var_ratio_min:
+                    curvature_check_inconclusive = False
+                    curvature_flag = True
+
+    behavioural_flag = (
+        speed_const_flag
+        or accel_flag
+        or accel_sign_change_flag
+        or regularity_flag
+        or curvature_flag
+        or too_perfect_flag
+    )
     bot_score = (
         (1 if speed_const_flag else 0)
         + (1 if accel_flag else 0)
@@ -436,6 +501,7 @@ def verify_attempt(payload: models.VerifyRequest):
         + (1 if speed_violation else 0)
         + (1 if regularity_flag else 0)
         + (1 if curvature_flag else 0)
+        + (1 if too_perfect_flag else 0)
         + (1 if not progress_ok else 0)
         + (1 if too_fast else 0)
     )
@@ -460,10 +526,7 @@ def verify_attempt(payload: models.VerifyRequest):
     elif not end_reached:
         reason = "incomplete"
         passed = False
-    elif coverage_len_ratio < config.REQUIRED_COVERAGE_RATIO:
-        reason = "low_coverage"
-        passed = False
-    elif coverage_ratio < config.REQUIRED_COVERAGE_RATIO:
+    elif not coverage_ok:
         reason = "low_coverage"
         passed = False
     elif too_fast:
@@ -475,7 +538,15 @@ def verify_attempt(payload: models.VerifyRequest):
     elif config.ENFORCE_CURVATURE_ADAPTATION and curvature_flag:
         reason = "no_curvature_adaptation"
         passed = False
-    elif config.ENFORCE_BEHAVIOURAL and behavioural_flag:
+    elif config.ENFORCE_BEHAVIOURAL and too_perfect_flag:
+        reason = "too_perfect"
+        passed = False
+    # Only block on behavioural signals when there's strong evidence.
+    elif config.ENFORCE_BEHAVIOURAL and (
+        accel_flag
+        or (speed_const_flag and regularity_flag)
+        or (accel_sign_change_flag and regularity_flag)
+    ):
         reason = "behavioural"
         passed = False
     else:
@@ -511,6 +582,7 @@ def verify_attempt(payload: models.VerifyRequest):
             "accel_flag": accel_flag,
             "behavioural_flag": behavioural_flag,
             "speed_violation": speed_violation,
+            "too_perfect_flag": too_perfect_flag,
             "bot_score": bot_score,
             "regularity_dt_cv": regularity_dt_cv,
             "regularity_dd_cv": regularity_dd_cv,
@@ -536,6 +608,37 @@ def verify_attempt(payload: models.VerifyRequest):
             "requiredCoverageRatio": config.REQUIRED_COVERAGE_RATIO,
             "tooFastMs": config.TOO_FAST_THRESHOLD_MS,
             "ttlMs": ttl_ms,
+        },
+        metrics={
+            "coverageLenRatio": coverage_len_ratio,
+            "coverageOk": coverage_ok,
+            "endDistancePx": end_distance,
+            "endReached": end_reached,
+            "tolerancePx": tolerance_px,
+            "minDurationMs": min_duration_ms,
+            "meanSpeedPxPerS": mean_speed,
+            "maxSpeedPxPerS": max_speed,
+            "backtrackRatio": backtrack_ratio,
+            "progressOk": progress_ok,
+            "speedConstFlag": speed_const_flag,
+            "accelFlag": accel_flag,
+            "accelSignChangeFlag": accel_sign_change_flag,
+            "speedViolation": speed_violation,
+            "regularityDtCv": regularity_dt_cv,
+            "regularityDdCv": regularity_dd_cv,
+            "regularityFlag": regularity_flag,
+            "tooPerfectFlag": too_perfect_flag,
+            "curvatureVarLow": curvature_var_low,
+            "curvatureVarHigh": curvature_var_high,
+            "curvatureMeanLow": curvature_mean_low,
+            "curvatureMeanHigh": curvature_mean_high,
+            "curvatureCvLow": curvature_cv_low,
+            "curvatureCvHigh": curvature_cv_high,
+            "curvatureSlowdownRatio": curvature_slowdown_ratio,
+            "curvatureCheckApplied": curvature_check_applied,
+            "curvatureCheckInconclusive": curvature_check_inconclusive,
+            "curvatureContrastRad": curvature_contrast_rad,
+            "peekCount": int(challenge_row["peek_count"]) if "peek_count" in row_keys and challenge_row["peek_count"] is not None else 0,
         },
         expiresAt=expires_at,
     )

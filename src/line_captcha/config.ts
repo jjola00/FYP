@@ -7,12 +7,12 @@ export const TARGET_COMPLETION_TIME_MS = 3000;
 export const PATH_TRAVEL_PX_RANGE = { min: 200, max: 300 };
 export const MAX_GENTLE_BENDS = 2;
 
-export const CHALLENGE_TTL_MS = 6000; // shorter TTL for faster sessions
+export const CHALLENGE_TTL_MS = 8000; // give humans more slack; bots are constrained by other checks
 export const TOO_FAST_THRESHOLD_MS = 1000;
 export const MIN_SAMPLES = 20;
 
-export const TRAIL_VISIBLE_MS = 400;
-export const TRAIL_FADEOUT_MS = 600; // fades out after visible window
+export const TRAIL_VISIBLE_MS = 700;
+export const TRAIL_FADEOUT_MS = 900; // fades out after visible window
 
 export const REQUIRED_COVERAGE_RATIO = 0.75; // 70–80% allowed; default to 75%
 export const SPEED_CONSTANTITY_RATIO = 0.08;

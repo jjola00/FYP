@@ -66,4 +66,5 @@ class VerifyResponse(BaseModel):
     behaviouralFlag: bool = Field(False, description="True when behavioural checks (e.g., constant velocity) were tripped but not blocked.")
     newChallengeRecommended: bool
     thresholds: dict
+    metrics: dict = Field(default_factory=dict)
     expiresAt: float

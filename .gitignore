@@ -13,6 +13,9 @@ __pycache__/
 data/*.db
 data/*.db-journal
 
+# Generated test logs
+logs/
+
 # Node / frontend
 node_modules/
 frontend/node_modules/

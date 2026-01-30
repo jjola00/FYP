@@ -67,6 +67,7 @@ def init_db() -> None:
                 accel_flag INTEGER,
                 behavioural_flag INTEGER,
                 speed_violation INTEGER,
+                too_perfect_flag INTEGER,
                 bot_score REAL,
                 regularity_dt_cv REAL,
                 regularity_dd_cv REAL,
@@ -108,6 +109,7 @@ def init_db() -> None:
             "ALTER TABLE attempt_logs ADD COLUMN accel_flag INTEGER",
             "ALTER TABLE attempt_logs ADD COLUMN behavioural_flag INTEGER",
             "ALTER TABLE attempt_logs ADD COLUMN speed_violation INTEGER",
+            "ALTER TABLE attempt_logs ADD COLUMN too_perfect_flag INTEGER",
             "ALTER TABLE attempt_logs ADD COLUMN bot_score REAL",
             "ALTER TABLE attempt_logs ADD COLUMN regularity_dt_cv REAL",
             "ALTER TABLE attempt_logs ADD COLUMN regularity_dd_cv REAL",
@@ -215,6 +217,7 @@ def save_attempt(log: Dict[str, Any]) -> None:
                 accel_flag,
                 behavioural_flag,
                 speed_violation,
+                too_perfect_flag,
                 bot_score,
                 regularity_dt_cv,
                 regularity_dd_cv,
@@ -222,7 +225,7 @@ def save_attempt(log: Dict[str, Any]) -> None:
                 curvature_var_high,
                 trajectory_json,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 log["attempt_id"],
@@ -252,6 +255,7 @@ def save_attempt(log: Dict[str, Any]) -> None:
                 1 if log.get("accel_flag") else 0,
                 1 if log.get("behavioural_flag") else 0,
                 1 if log.get("speed_violation") else 0,
+                1 if log.get("too_perfect_flag") else 0,
                 log.get("bot_score"),
                 log.get("regularity_dt_cv"),
                 log.get("regularity_dd_cv"),

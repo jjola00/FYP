@@ -19,10 +19,10 @@ MAX_GENTLE_BENDS = 2
 
 # Timing
 TARGET_COMPLETION_TIME_MS = 3000
-CHALLENGE_TTL_MS = 6_000  # shorter TTL for faster sessions
+CHALLENGE_TTL_MS = 8_000  # give humans more slack; bots are constrained by other checks
 TOO_FAST_THRESHOLD_MS = 1_000
-TRAIL_VISIBLE_MS = 400
-TRAIL_FADEOUT_MS = 600
+TRAIL_VISIBLE_MS = 700
+TRAIL_FADEOUT_MS = 900
 REQUIRED_COVERAGE_RATIO = 0.75  # 70–80% allowed; default to 75%
 MIN_SAMPLES = 20
 
@@ -82,6 +82,12 @@ CURVATURE_LOW_PCTL = 0.3
 CURVATURE_HIGH_PCTL = 0.7
 CURVATURE_VAR_RATIO_MIN = 1.2
 CURVATURE_MIN_SAMPLES = 8
+CURVATURE_SLOWDOWN_RATIO_MIN = 1.04  # mean_low / mean_high minimum to consider "slowing on curves"
+CURVATURE_CV_EPS = 0.02  # treat CV below this as "near-constant"
+CURVATURE_NO_SLOWDOWN_RATIO_MAX = 1.02  # below this is "no slowdown"
+CURVATURE_CONTRAST_MIN_RAD = 0.08  # below this, curvature buckets are too similar to conclude
+MIN_DEVIATION_MEAN_FRAC = 0.02  # mean deviation must not be *too* perfect (as a fraction of tolerance)
+MIN_DEVIATION_MAX_FRAC = 0.06  # max deviation must not be *too* perfect (as a fraction of tolerance)
 
 POINTER_BEHAVIOR = {
     "mouse": {

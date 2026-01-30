@@ -36,6 +36,8 @@ const state = {
   pointerProfile: "mouse",
   lookahead: [],
   lastPeekAt: 0,
+  peekMinIntervalMs: 100,
+  peekBlockedUntil: 0,
   nonce: "",
   token: "",
   finishPoint: null,
@@ -59,15 +61,25 @@ function formatFailureReason(data) {
   console.log("[formatFailureReason] Formatting reason:", reason);
   switch (reason) {
     case "incomplete":
+      return "Didn't reach the end.";
     case "insufficient_samples":
+      return "Move smoothly without lifting.";
     case "non_monotonic_time":
+      return "Timing issue. Try again.";
     case "too_fast":
+      return "Too fast.";
     case "non_monotonic_path":
+      return "Try not to backtrack.";
     case "speed_violation":
+      return "Too fast.";
     case "behavioural":
+      return "Movement looked automated.";
+    case "too_perfect":
+      return "Movement looked too perfect.";
     case "regularity":
+      return "Movement looked too regular.";
     case "no_curvature_adaptation":
-      return "Captcha incompleted.";
+      return "Slow down a bit on curves.";
     case "jump_detected":
     case "low_coverage":
       return "Strayed too far.";
@@ -102,6 +114,7 @@ function startTimer() {
     }
     const now = Date.now();
     const remaining = Math.max(0, state.expiresAtMs - now);
+    setTimer(remaining ? `${Math.ceil(remaining / 1000)}s` : "");
     if (remaining <= 0) {
       console.log("[startTimer] Timer expired - setting expired flag");
       state.expired = true;
@@ -319,9 +332,20 @@ function handlePointerDown(evt) {
     setStatus("Too slow.", "error");
     return;
   }
-  console.log("[handlePointerDown] Starting new trace");
   state.pointerProfile = pointerProfileFromEvent(evt);
   const profile = state.pointerProfile === "mouse" ? "mouse" : "touch";
+  const start = state.challenge?.startPoint;
+  if (start) {
+    const dist = Math.hypot(evt.offsetX - start[0], evt.offsetY - start[1]);
+    const tol =
+      profile === "mouse" ? state.challenge?.tolerance?.mouse : state.challenge?.tolerance?.touch;
+    const startRadius = (tol ? tol : profile === "mouse" ? 20 : 30) * 1.25;
+    if (dist > startRadius) {
+      setStatus("Start on the blue dot.", "error");
+      return;
+    }
+  }
+  console.log("[handlePointerDown] Starting new trace");
   const lineWidth = lineWidthForProfile(profile);
 
   state.drawing = true;
@@ -396,7 +420,8 @@ function setupControls() {
 
 async function fetchLookahead(x, y, force = false) {
   const now = performance.now();
-  if (!force && now - state.lastPeekAt < 100) return; // throttle
+  if (!force && now < state.peekBlockedUntil) return;
+  if (!force && now - state.lastPeekAt < state.peekMinIntervalMs) return; // throttle
   state.lastPeekAt = now;
   if (!state.challenge) return;
   try {
@@ -410,12 +435,19 @@ async function fetchLookahead(x, y, force = false) {
         cursor: [x, y],
       }),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      if (res.status === 429) {
+        state.peekMinIntervalMs = Math.min(250, state.peekMinIntervalMs + 25);
+        state.peekBlockedUntil = now + state.peekMinIntervalMs;
+      }
+      return;
+    }
     const data = await res.json();
     state.lookahead = data.ahead;
     state.distanceToEnd = data.distanceToEnd;
     state.showFinish = Boolean(data.finish);
     state.finishPoint = data.finish || null;
+    state.peekMinIntervalMs = Math.max(100, state.peekMinIntervalMs - 5);
   } catch (err) {
     console.error("peek error", err);
   }
