@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 
-import config, db, models, path, token
+import config, db, models, path, captcha_token
 
 app = fastapi.FastAPI(title="Ephemeral Line CAPTCHA")
 
@@ -123,7 +123,7 @@ def new_challenge() -> models.NewChallengeResponse:
         "iat": issued_at,
         "nonce": nonce,
     }
-    signed_token = token.sign(token_payload)
+    signed_token = captcha_token.sign(token_payload)
 
     return models.NewChallengeResponse(
         challengeId=challenge_id,
@@ -160,7 +160,7 @@ def peek_path(payload: models.PeekRequest):
     expires_at = created_at + ttl_ms / 1000.0
 
     try:
-        claims = token.verify(payload.token)
+        claims = captcha_token.verify(payload.token)
     except Exception:
         raise fastapi.HTTPException(status_code=401, detail="Invalid token")
     if claims.get("cid") != payload.challengeId or claims.get("nonce") != payload.nonce:
@@ -263,7 +263,7 @@ def verify_attempt(payload: models.VerifyRequest):
     ttl_expired = now > expires_at
 
     try:
-        claims = token.verify(payload.token)
+        claims = captcha_token.verify(payload.token)
     except Exception:
         raise fastapi.HTTPException(status_code=401, detail="Invalid token")
     if (
