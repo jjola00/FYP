@@ -61,32 +61,37 @@ function formatFailureReason(data) {
   console.log("[formatFailureReason] Formatting reason:", reason);
   switch (reason) {
     case "incomplete":
-      return "Didn't reach the end.";
+      return "Follow the line to the end.";
     case "insufficient_samples":
-      return "Move smoothly without lifting.";
+      return "Keep your finger/cursor down while tracing.";
     case "non_monotonic_time":
-      return "Timing issue. Try again.";
+      return "Something went wrong. Try again.";
     case "too_fast":
-      return "Too fast.";
+      return "Slow down a little.";
     case "non_monotonic_path":
-      return "Try not to backtrack.";
+      return "Keep moving forward along the line.";
     case "speed_violation":
-      return "Too fast.";
+      return "Slow down a little.";
     case "behavioural":
-      return "Movement looked automated.";
+      return "Try varying your speed naturally.";
     case "too_perfect":
-      return "Movement looked too perfect.";
+      return "Relax - small wobbles are okay.";
     case "regularity":
-      return "Movement looked too regular.";
+      return "Try a more natural rhythm.";
     case "no_curvature_adaptation":
       return "Slow down a bit on curves.";
+    case "no_ballistic_profile":
+      return "Try accelerating at the start, slowing at the end.";
+    case "no_hesitation":
+      return "Take your time at the tricky bits.";
     case "jump_detected":
+      return "Stay close to the line.";
     case "low_coverage":
-      return "Strayed too far.";
+      return "Follow the line more closely.";
     case "timeout":
-      return "Too slow.";
+      return "Time's up. Try again.";
     default:
-      return "Captcha incompleted.";
+      return "Couldn't verify. Try again.";
   }
 }
 
@@ -103,6 +108,40 @@ function lineWidthForProfile(profile) {
   }
   const base = tol?.touch ? Math.max(6, Math.min(10, tol.touch * 0.35)) : config.lineWidthTouch;
   return base * (dpr >= 2 ? 1.15 : 1);
+}
+
+// Calculate distance from point to nearest point on a polyline
+function distanceToPath(px, py, path) {
+  if (!path || path.length < 2) return Infinity;
+  let minDist = Infinity;
+  for (let i = 0; i < path.length - 1; i++) {
+    const [x1, y1] = path[i];
+    const [x2, y2] = path[i + 1];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq > 0 ? ((px - x1) * dx + (py - y1) * dy) / lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const nearX = x1 + t * dx;
+    const nearY = y1 + t * dy;
+    const dist = Math.hypot(px - nearX, py - nearY);
+    if (dist < minDist) minDist = dist;
+  }
+  return minDist;
+}
+
+// Get stroke color based on distance from path (blue -> orange -> red)
+function getStrokeColor(deviation, tolerance, alpha) {
+  if (deviation <= tolerance * 0.5) {
+    // On track - cyan/blue
+    return `rgba(56, 189, 248, ${alpha.toFixed(3)})`;
+  } else if (deviation <= tolerance) {
+    // Near edge - orange warning
+    return `rgba(251, 146, 60, ${alpha.toFixed(3)})`;
+  } else {
+    // Off path - red
+    return `rgba(248, 113, 113, ${alpha.toFixed(3)})`;
+  }
 }
 
 function startTimer() {
@@ -172,12 +211,29 @@ function drawMarkers() {
   ctx.beginPath();
   ctx.arc(start[0], start[1], 8, 0, Math.PI * 2);
   ctx.fill();
-   // Finish marker appears only when near end
+  // Finish marker appears only when near end
   if (state.showFinish && state.finishPoint) {
+    // Pulse effect when very close to finish
+    const distToEnd = state.distanceToEnd ?? Infinity;
+    const pulseThreshold = 60;
+    let radius = 8;
+    if (distToEnd < pulseThreshold && state.drawing) {
+      // Pulsing radius based on proximity (closer = bigger pulse)
+      const pulse = Math.sin(performance.now() / 150) * 0.3 + 1;
+      const proximity = 1 - (distToEnd / pulseThreshold);
+      radius = 8 + (4 * proximity * pulse);
+    }
     ctx.fillStyle = "#34d399";
     ctx.beginPath();
-    ctx.arc(state.finishPoint[0], state.finishPoint[1], 8, 0, Math.PI * 2);
+    ctx.arc(state.finishPoint[0], state.finishPoint[1], radius, 0, Math.PI * 2);
     ctx.fill();
+    // Show "Almost there!" when very close
+    if (distToEnd < 30 && state.drawing) {
+      ctx.fillStyle = "rgba(52, 211, 153, 0.8)";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Almost there!", state.finishPoint[0], state.finishPoint[1] - 18);
+    }
   }
   ctx.restore();
 }
@@ -228,7 +284,10 @@ function drawSegments() {
     const midX = (curr.x + prev.x) / 2;
     const midY = (curr.y + prev.y) / 2;
     const alpha = Math.min(prev.alpha, curr.alpha);
-    ctx.strokeStyle = `rgba(56, 189, 248, ${alpha.toFixed(3)})`;
+    // Use deviation-based coloring if available
+    const deviation = curr.deviation ?? 0;
+    const tolerance = curr.tolerance ?? 20;
+    ctx.strokeStyle = getStrokeColor(deviation, tolerance, alpha);
     ctx.lineWidth = curr.lineWidth;
     ctx.beginPath();
     ctx.moveTo(prev.x, prev.y);
@@ -371,12 +430,41 @@ function handlePointerMove(evt) {
   state.trajectory.push({ x: evt.offsetX, y: evt.offsetY, t: Math.round(relT) });
   const profile = state.pointerProfile === "mouse" ? "mouse" : "touch";
   const lineWidth = lineWidthForProfile(profile);
+
+  // Calculate deviation from guide path for visual feedback
+  const deviation = distanceToPath(evt.offsetX, evt.offsetY, state.lookahead);
+  const tol = profile === "mouse"
+    ? (state.challenge?.tolerance?.mouse || 20)
+    : (state.challenge?.tolerance?.touch || 30);
+
   state.segments.push({
     x: evt.offsetX,
     y: evt.offsetY,
     createdAt: performance.now(),
     lineWidth,
+    deviation,
+    tolerance: tol,
   });
+
+  // Update distance to finish for progress feedback
+  if (state.finishPoint) {
+    state.distanceToEnd = Math.hypot(
+      evt.offsetX - state.finishPoint[0],
+      evt.offsetY - state.finishPoint[1]
+    );
+  }
+
+  // Real-time guidance based on deviation
+  if (deviation > tol * 1.5 && state.lookahead.length > 0) {
+    setStatus("Getting off track...", "error");
+  } else if (deviation > tol * 0.8 && state.lookahead.length > 0) {
+    setStatus("Stay on the line", "info");
+  } else if (state.distanceToEnd && state.distanceToEnd < 50) {
+    setStatus("Almost there!", "success");
+  } else {
+    setStatus("Tracing...", "info");
+  }
+
   fetchLookahead(evt.offsetX, evt.offsetY);
   drawFrame();
 }

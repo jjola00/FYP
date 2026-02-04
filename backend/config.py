@@ -47,6 +47,8 @@ ENFORCE_MIN_DURATION = _env_bool("ENFORCE_MIN_DURATION", True)
 ENFORCE_REGULARITY = _env_bool("ENFORCE_REGULARITY", True)
 ENFORCE_CURVATURE_ADAPTATION = _env_bool("ENFORCE_CURVATURE_ADAPTATION", True)
 ENFORCE_BEHAVIOURAL = _env_bool("ENFORCE_BEHAVIOURAL", True)
+ENFORCE_BALLISTIC_PROFILE = _env_bool("ENFORCE_BALLISTIC_PROFILE", True)
+ENFORCE_HESITATION = _env_bool("ENFORCE_HESITATION", True)
 
 # Pointer profiles
 POINTER_CONFIG = {
@@ -80,14 +82,24 @@ MAX_BACKTRACK_SAMPLE_RATIO = 0.1
 MIN_ACCEL_SIGN_CHANGES = 1
 CURVATURE_LOW_PCTL = 0.3
 CURVATURE_HIGH_PCTL = 0.7
-CURVATURE_VAR_RATIO_MIN = 1.2
-CURVATURE_MIN_SAMPLES = 8
-CURVATURE_SLOWDOWN_RATIO_MIN = 1.04  # mean_low / mean_high minimum to consider "slowing on curves"
-CURVATURE_CV_EPS = 0.02  # treat CV below this as "near-constant"
-CURVATURE_NO_SLOWDOWN_RATIO_MAX = 1.02  # below this is "no slowdown"
-CURVATURE_CONTRAST_MIN_RAD = 0.08  # below this, curvature buckets are too similar to conclude
+CURVATURE_VAR_RATIO_MIN = 1.15
+CURVATURE_MIN_SAMPLES = 6
+CURVATURE_SLOWDOWN_RATIO_MIN = 1.08  # mean_low / mean_high minimum to consider "slowing on curves"
+CURVATURE_CV_EPS = 0.03  # treat CV below this as "near-constant"
+CURVATURE_NO_SLOWDOWN_RATIO_MAX = 1.04  # below this is "no slowdown"
+CURVATURE_CONTRAST_MIN_RAD = 0.06  # below this, curvature buckets are too similar to conclude
 MIN_DEVIATION_MEAN_FRAC = 0.02  # mean deviation must not be *too* perfect (as a fraction of tolerance)
 MIN_DEVIATION_MAX_FRAC = 0.06  # max deviation must not be *too* perfect (as a fraction of tolerance)
+
+# Ballistic profile thresholds (human velocity curve: accel -> cruise -> decel)
+BALLISTIC_THIRD_RATIO_MIN = 0.7  # first third should have >= this fraction of peak speed
+BALLISTIC_FINAL_DECEL_MIN = 0.15  # final third speed should be at least this much slower than mid
+
+# Hesitation detection (micro-pauses at high-curvature points)
+HESITATION_PAUSE_MS_MIN = 40  # minimum pause duration to count as hesitation
+HESITATION_PAUSE_MS_MAX = 200  # maximum (longer is suspicious)
+HESITATION_MIN_COUNT = 1  # humans should have at least this many micro-pauses
+HESITATION_CURVATURE_PCTL = 0.7  # look for pauses near high-curvature regions (top 30%)
 
 POINTER_BEHAVIOR = {
     "mouse": {
@@ -99,8 +111,11 @@ POINTER_BEHAVIOR = {
         "max_accel_px_per_s2": 12000,
         "min_dt_cv": 0.08,
         "min_dd_cv": 0.08,
-        "curvature_var_ratio_min": 1.2,
-        "curvature_min_samples": 8,
+        "curvature_var_ratio_min": 1.15,
+        "curvature_min_samples": 6,
+        "ballistic_third_ratio_min": 0.7,
+        "ballistic_final_decel_min": 0.15,
+        "hesitation_min_count": 1,
     },
     "touch": {
         "max_speed_px_per_s": 1800,
@@ -111,8 +126,11 @@ POINTER_BEHAVIOR = {
         "max_accel_px_per_s2": 10000,
         "min_dt_cv": 0.07,
         "min_dd_cv": 0.07,
-        "curvature_var_ratio_min": 1.2,
-        "curvature_min_samples": 8,
+        "curvature_var_ratio_min": 1.15,
+        "curvature_min_samples": 6,
+        "ballistic_third_ratio_min": 0.65,
+        "ballistic_final_decel_min": 0.12,
+        "hesitation_min_count": 1,
     },
 }
 

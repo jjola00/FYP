@@ -125,38 +125,160 @@ def position_along_path(points: List[Point], cursor: Point) -> float:
     return pos
 
 
+def _generate_horizontal_path(rnd: random.Random, left_to_right: bool = True) -> List[Point]:
+    """Generate a horizontal-dominant path (left-to-right or right-to-left)."""
+    margin = 60
+    w, h = config.CANVAS_WIDTH_PX, config.CANVAS_HEIGHT_PX
+
+    if left_to_right:
+        p0 = (rnd.uniform(margin, w * 0.3), rnd.uniform(margin, h - margin))
+        p3 = (rnd.uniform(w * 0.7, w - margin), rnd.uniform(margin, h - margin))
+    else:
+        p0 = (rnd.uniform(w * 0.7, w - margin), rnd.uniform(margin, h - margin))
+        p3 = (rnd.uniform(margin, w * 0.3), rnd.uniform(margin, h - margin))
+
+    bend_strength = rnd.uniform(-80, 80)
+    dx = p3[0] - p0[0]
+    p1 = (p0[0] + dx * 0.33, p0[1] + bend_strength)
+    p2 = (p0[0] + dx * 0.66, p3[1] - bend_strength / 2)
+
+    samples = 80
+    return [_bezier_point(i / (samples - 1), p0, p1, p2, p3) for i in range(samples)]
+
+
+def _generate_vertical_path(rnd: random.Random, top_to_bottom: bool = True) -> List[Point]:
+    """Generate a vertical-dominant path (top-to-bottom or bottom-to-top)."""
+    margin = 60
+    w, h = config.CANVAS_WIDTH_PX, config.CANVAS_HEIGHT_PX
+
+    if top_to_bottom:
+        p0 = (rnd.uniform(margin, w - margin), rnd.uniform(margin, h * 0.3))
+        p3 = (rnd.uniform(margin, w - margin), rnd.uniform(h * 0.7, h - margin))
+    else:
+        p0 = (rnd.uniform(margin, w - margin), rnd.uniform(h * 0.7, h - margin))
+        p3 = (rnd.uniform(margin, w - margin), rnd.uniform(margin, h * 0.3))
+
+    bend_strength = rnd.uniform(-80, 80)
+    dy = p3[1] - p0[1]
+    p1 = (p0[0] + bend_strength, p0[1] + dy * 0.33)
+    p2 = (p3[0] - bend_strength / 2, p0[1] + dy * 0.66)
+
+    samples = 80
+    return [_bezier_point(i / (samples - 1), p0, p1, p2, p3) for i in range(samples)]
+
+
+def _generate_diagonal_path(rnd: random.Random) -> List[Point]:
+    """Generate a diagonal path (corner to corner variations)."""
+    margin = 60
+    w, h = config.CANVAS_WIDTH_PX, config.CANVAS_HEIGHT_PX
+
+    # Pick two opposite-ish corners
+    corners = [
+        ((margin, margin), (w - margin, h - margin)),           # top-left to bottom-right
+        ((w - margin, margin), (margin, h - margin)),           # top-right to bottom-left
+        ((margin, h - margin), (w - margin, margin)),           # bottom-left to top-right
+        ((w - margin, h - margin), (margin, margin)),           # bottom-right to top-left
+    ]
+    start_corner, end_corner = rnd.choice(corners)
+
+    # Add some randomness to the corners
+    p0 = (start_corner[0] + rnd.uniform(-20, 20), start_corner[1] + rnd.uniform(-20, 20))
+    p3 = (end_corner[0] + rnd.uniform(-20, 20), end_corner[1] + rnd.uniform(-20, 20))
+
+    # Control points create a gentle curve
+    bend_strength = rnd.uniform(-60, 60)
+    mid_x = (p0[0] + p3[0]) / 2
+    mid_y = (p0[1] + p3[1]) / 2
+    p1 = (mid_x + bend_strength, p0[1] + (p3[1] - p0[1]) * 0.25)
+    p2 = (mid_x - bend_strength, p0[1] + (p3[1] - p0[1]) * 0.75)
+
+    samples = 80
+    return [_bezier_point(i / (samples - 1), p0, p1, p2, p3) for i in range(samples)]
+
+
+def _generate_s_curve_path(rnd: random.Random) -> List[Point]:
+    """Generate an S-curve with two opposing bends (tests curvature adaptation)."""
+    margin = 60
+    w, h = config.CANVAS_WIDTH_PX, config.CANVAS_HEIGHT_PX
+
+    # Horizontal S-curve (left to right with up-down-up or down-up-down pattern)
+    p0 = (rnd.uniform(margin, w * 0.25), rnd.uniform(h * 0.3, h * 0.7))
+    p3 = (rnd.uniform(w * 0.75, w - margin), rnd.uniform(h * 0.3, h * 0.7))
+
+    # Mid point
+    mid_x = (p0[0] + p3[0]) / 2
+    mid_y = (p0[1] + p3[1]) / 2
+
+    # First bend direction (up or down)
+    bend_dir = rnd.choice([-1, 1])
+    bend_amount = rnd.uniform(50, 90)
+
+    # First curve: start to middle
+    p1_a = (p0[0] + (mid_x - p0[0]) * 0.5, p0[1] + bend_dir * bend_amount)
+    p2_a = (mid_x - 20, mid_y + bend_dir * bend_amount * 0.3)
+
+    # Second curve: middle to end (opposite bend)
+    p1_b = (mid_x + 20, mid_y - bend_dir * bend_amount * 0.3)
+    p2_b = (p3[0] - (p3[0] - mid_x) * 0.5, p3[1] - bend_dir * bend_amount)
+
+    # Sample both curves
+    samples_per_curve = 40
+    pts = []
+    for i in range(samples_per_curve):
+        t = i / (samples_per_curve - 1)
+        pts.append(_bezier_point(t, p0, p1_a, p2_a, (mid_x, mid_y)))
+    for i in range(1, samples_per_curve):  # skip first to avoid duplicate
+        t = i / (samples_per_curve - 1)
+        pts.append(_bezier_point(t, (mid_x, mid_y), p1_b, p2_b, p3))
+
+    return pts
+
+
+# Path family weights (can be tuned)
+PATH_FAMILIES = [
+    ("horizontal_lr", _generate_horizontal_path, {"left_to_right": True}, 3),
+    ("horizontal_rl", _generate_horizontal_path, {"left_to_right": False}, 2),
+    ("vertical_tb", _generate_vertical_path, {"top_to_bottom": True}, 2),
+    ("vertical_bt", _generate_vertical_path, {"top_to_bottom": False}, 1),
+    ("diagonal", _generate_diagonal_path, {}, 2),
+    ("s_curve", _generate_s_curve_path, {}, 3),
+]
+
+
 def generate_path(seed: str) -> Tuple[List[Point], float]:
     """
-    Generate a smooth cubic path with 1–2 gentle bends and target length 200–300 px.
+    Generate a smooth path from one of several families.
     Returns the sampled points and approximate length.
+
+    Path families:
+    - horizontal_lr: left to right (classic)
+    - horizontal_rl: right to left
+    - vertical_tb: top to bottom
+    - vertical_bt: bottom to top
+    - diagonal: corner to corner
+    - s_curve: S-shaped with two bends (better curvature testing)
     """
     rnd = random.Random(seed)
+
+    # Weighted random selection of path family
+    total_weight = sum(f[3] for f in PATH_FAMILIES)
+    choice = rnd.uniform(0, total_weight)
+    cumulative = 0
+    selected_family = PATH_FAMILIES[0]
+    for family in PATH_FAMILIES:
+        cumulative += family[3]
+        if choice <= cumulative:
+            selected_family = family
+            break
+
+    family_name, generator, kwargs, _ = selected_family
+
     attempts = 0
     while True:
         attempts += 1
-        margin = 60
-        p0 = (
-            rnd.uniform(margin, config.CANVAS_WIDTH_PX * 0.3),
-            rnd.uniform(margin, config.CANVAS_HEIGHT_PX * 0.7),
-        )
-        p3 = (
-            rnd.uniform(config.CANVAS_WIDTH_PX * 0.7, config.CANVAS_WIDTH_PX - margin),
-            rnd.uniform(margin, config.CANVAS_HEIGHT_PX * 0.7),
-        )
-
-        bend_strength = rnd.uniform(-80, 80)
-        p1 = (
-            p0[0] + rnd.uniform(60, 120),
-            p0[1] + bend_strength,
-        )
-        p2 = (
-            p3[0] - rnd.uniform(60, 120),
-            p3[1] - bend_strength / 2,
-        )
-
-        samples = 80
-        pts = [_bezier_point(i / (samples - 1), p0, p1, p2, p3) for i in range(samples)]
+        pts = generator(rnd, **kwargs)
         length = _approx_length(pts)
+
         if config.PATH_TRAVEL_PX_MIN <= length <= config.PATH_TRAVEL_PX_MAX:
             return pts, length
         if attempts >= 10:

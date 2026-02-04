@@ -270,6 +270,9 @@ def verify_attempt(payload: models.VerifyRequest):
     min_dd_cv = behaviour.get("min_dd_cv", 0.0)
     curvature_var_ratio_min = behaviour.get("curvature_var_ratio_min", config.CURVATURE_VAR_RATIO_MIN)
     curvature_min_samples = int(behaviour.get("curvature_min_samples", config.CURVATURE_MIN_SAMPLES))
+    ballistic_third_ratio_min = behaviour.get("ballistic_third_ratio_min", config.BALLISTIC_THIRD_RATIO_MIN)
+    ballistic_final_decel_min = behaviour.get("ballistic_final_decel_min", config.BALLISTIC_FINAL_DECEL_MIN)
+    hesitation_min_count = int(behaviour.get("hesitation_min_count", config.HESITATION_MIN_COUNT))
 
     path_points = json.loads(challenge_row["points_json"])
     cums = path.cumulative_lengths(path_points)
@@ -486,6 +489,51 @@ def verify_attempt(payload: models.VerifyRequest):
                     curvature_check_inconclusive = False
                     curvature_flag = True
 
+    # Ballistic profile check: humans accelerate early, cruise mid, decelerate late
+    ballistic_flag = False
+    ballistic_first_ratio = None
+    ballistic_final_ratio = None
+    if len(speeds) >= 9:
+        n = len(speeds)
+        third = n // 3
+        first_third = speeds[:third]
+        mid_third = speeds[third : 2 * third]
+        final_third = speeds[2 * third :]
+        peak_speed = max(speeds) if speeds else 1.0
+        if peak_speed > 0:
+            first_max = max(first_third) if first_third else 0
+            ballistic_first_ratio = first_max / peak_speed
+            mid_mean = sum(mid_third) / len(mid_third) if mid_third else 0
+            final_mean = sum(final_third) / len(final_third) if final_third else 0
+            if mid_mean > 0:
+                ballistic_final_ratio = (mid_mean - final_mean) / mid_mean
+            # Flag if profile is too flat (no acceleration buildup or no deceleration)
+            if (
+                ballistic_first_ratio < ballistic_third_ratio_min
+                and ballistic_final_ratio is not None
+                and ballistic_final_ratio < ballistic_final_decel_min
+            ):
+                ballistic_flag = True
+
+    # Hesitation detection: humans micro-pause at high-curvature decision points
+    hesitation_flag = False
+    hesitation_count = 0
+    hesitation_at_curves = 0
+    if dt_samples and curvature_high is not None:
+        for i, dt_ms in enumerate(dt_samples):
+            if config.HESITATION_PAUSE_MS_MIN <= dt_ms <= config.HESITATION_PAUSE_MS_MAX:
+                hesitation_count += 1
+                # Check if this pause is near a high-curvature point
+                if i + 1 < len(payload.trajectory):
+                    sample = payload.trajectory[i + 1]
+                    pos = path.position_along_path(path_points, (sample.x, sample.y))
+                    idx_pos = path.index_at_position(cums, pos)
+                    if idx_pos < len(curvatures) and curvatures[idx_pos] >= curvature_high:
+                        hesitation_at_curves += 1
+        # Flag if no hesitations found (bots with uniform timing lack micro-pauses)
+        if hesitation_count < hesitation_min_count:
+            hesitation_flag = True
+
     behavioural_flag = (
         speed_const_flag
         or accel_flag
@@ -493,6 +541,8 @@ def verify_attempt(payload: models.VerifyRequest):
         or regularity_flag
         or curvature_flag
         or too_perfect_flag
+        or ballistic_flag
+        or hesitation_flag
     )
     bot_score = (
         (1 if speed_const_flag else 0)
@@ -504,6 +554,8 @@ def verify_attempt(payload: models.VerifyRequest):
         + (1 if too_perfect_flag else 0)
         + (1 if not progress_ok else 0)
         + (1 if too_fast else 0)
+        + (1 if ballistic_flag else 0)
+        + (1 if hesitation_flag else 0)
     )
     if ttl_expired:
         reason = "timeout"
@@ -538,6 +590,14 @@ def verify_attempt(payload: models.VerifyRequest):
     elif config.ENFORCE_CURVATURE_ADAPTATION and curvature_flag:
         reason = "no_curvature_adaptation"
         passed = False
+    elif config.ENFORCE_BALLISTIC_PROFILE and ballistic_flag and hesitation_flag:
+        # Both flat velocity profile AND no hesitations is strong bot evidence
+        reason = "no_ballistic_profile"
+        passed = False
+    elif config.ENFORCE_HESITATION and hesitation_flag and regularity_flag:
+        # No micro-pauses combined with regular timing
+        reason = "no_hesitation"
+        passed = False
     elif config.ENFORCE_BEHAVIOURAL and too_perfect_flag:
         reason = "too_perfect"
         passed = False
@@ -546,6 +606,7 @@ def verify_attempt(payload: models.VerifyRequest):
         accel_flag
         or (speed_const_flag and regularity_flag)
         or (accel_sign_change_flag and regularity_flag)
+        or (ballistic_flag and hesitation_flag)
     ):
         reason = "behavioural"
         passed = False
@@ -588,6 +649,12 @@ def verify_attempt(payload: models.VerifyRequest):
             "regularity_dd_cv": regularity_dd_cv,
             "curvature_var_low": curvature_var_low,
             "curvature_var_high": curvature_var_high,
+            "ballistic_flag": ballistic_flag,
+            "ballistic_first_ratio": ballistic_first_ratio,
+            "ballistic_final_ratio": ballistic_final_ratio,
+            "hesitation_flag": hesitation_flag,
+            "hesitation_count": hesitation_count,
+            "hesitation_at_curves": hesitation_at_curves,
             "trajectory": [s.dict() for s in payload.trajectory],
         }
     )
@@ -639,6 +706,12 @@ def verify_attempt(payload: models.VerifyRequest):
             "curvatureCheckInconclusive": curvature_check_inconclusive,
             "curvatureContrastRad": curvature_contrast_rad,
             "peekCount": int(challenge_row["peek_count"]) if "peek_count" in row_keys and challenge_row["peek_count"] is not None else 0,
+            "ballisticFlag": ballistic_flag,
+            "ballisticFirstRatio": ballistic_first_ratio,
+            "ballisticFinalRatio": ballistic_final_ratio,
+            "hesitationFlag": hesitation_flag,
+            "hesitationCount": hesitation_count,
+            "hesitationAtCurves": hesitation_at_curves,
         },
         expiresAt=expires_at,
     )
