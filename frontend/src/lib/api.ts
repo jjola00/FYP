@@ -1,5 +1,8 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
+// Request timeout in milliseconds
+const REQUEST_TIMEOUT_MS = 10000;
+
 export const captchaConfig = {
   canvasWidth: 400,
   canvasHeight: 400,
@@ -11,6 +14,38 @@ export const captchaConfig = {
   lineWidthTouch: 7,
   minSamples: 20,
 };
+
+// Generate or retrieve a persistent session ID for this browser session
+function getSessionId(): string {
+  if (typeof window === "undefined") return "server-render";
+
+  let sessionId = sessionStorage.getItem("captcha_session_id");
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    sessionStorage.setItem("captcha_session_id", sessionId);
+  }
+  return sessionId;
+}
+
+// Helper to fetch with timeout
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 // Compute trajectory hash for client binding (SHA-256, first 32 chars)
 export async function computeTrajectoryHash(trajectory: TrajectoryPoint[], nonce: string, challengeId: string): Promise<string> {
@@ -53,8 +88,11 @@ export interface LookaheadResponse {
 }
 
 export async function fetchChallenge(): Promise<Challenge> {
-  const res = await fetch(`${API_BASE}/captcha/line/new`, { method: "POST" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const res = await fetchWithTimeout(`${API_BASE}/captcha/line/new`, { method: "POST" });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Failed to fetch challenge: HTTP ${res.status}${text ? ` - ${text}` : ""}`);
+  }
   return await res.json();
 }
 
@@ -69,7 +107,7 @@ export async function verifyAttempt(
     challengeId: challenge.challengeId,
     nonce: challenge.nonce,
     token: challenge.token,
-    sessionId: "demo-session",
+    sessionId: getSessionId(),
     pointerType,
     osFamily: navigator.platform,
     browserFamily: navigator.userAgent,
@@ -78,13 +116,18 @@ export async function verifyAttempt(
     trajectoryHash,
     clientTimingMs,
   };
-  
-  const res = await fetch(`${API_BASE}/captcha/line/verify`, {
+
+  const res = await fetchWithTimeout(`${API_BASE}/captcha/line/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Verification request failed: HTTP ${res.status}${text ? ` - ${text}` : ""}`);
+  }
+
   return await res.json();
 }
 
@@ -93,7 +136,7 @@ export async function fetchLookahead(
   x: number,
   y: number
 ): Promise<LookaheadResponse> {
-  const res = await fetch(`${API_BASE}/captcha/line/peek`, {
+  const res = await fetchWithTimeout(`${API_BASE}/captcha/line/peek`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -103,10 +146,10 @@ export async function fetchLookahead(
       cursor: [x, y],
     }),
   });
-  
+
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
-  
+
   return await res.json();
 }

@@ -13,12 +13,16 @@ from . import config, db, models, path, token
 
 app = fastapi.FastAPI(title="Ephemeral Line CAPTCHA")
 
+# CORS: Use ALLOWED_ORIGINS env var (comma-separated) or default to localhost for dev
+import os
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:9002").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 db.init_db()
