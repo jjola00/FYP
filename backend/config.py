@@ -36,11 +36,20 @@ PEEK_ADVANCE_MARGIN_PX = 20
 PEEK_DISTANCE_FACTOR = 1.2
 PROGRESS_BACKTRACK_PX = 10
 
+# Peek decay - reduce lookahead if cursor hasn't advanced much
+PEEK_DECAY_MIN_ADVANCE_PX = 15  # need this much advance to get full lookahead
+PEEK_DECAY_FACTOR = 0.5  # multiply lookahead by this when no advance
+PEEK_DECAY_MIN_PX = 12  # minimum lookahead even with full decay
+PEEK_EFFICIENCY_WARN_RATIO = 3.0  # warn if peeks/distance exceeds this
+
 # Enforcement toggles (for ablation testing)
 ENFORCE_PEEK_STATE = _env_bool("ENFORCE_PEEK_STATE", True)
 ENFORCE_PEEK_RATE = _env_bool("ENFORCE_PEEK_RATE", True)
 ENFORCE_PEEK_DISTANCE = _env_bool("ENFORCE_PEEK_DISTANCE", True)
 ENFORCE_PEEK_BUDGET = _env_bool("ENFORCE_PEEK_BUDGET", True)
+ENFORCE_PEEK_DECAY = _env_bool("ENFORCE_PEEK_DECAY", True)
+ENFORCE_TRAJECTORY_HASH = _env_bool("ENFORCE_TRAJECTORY_HASH", False)  # Enable after frontend update
+CLIENT_TIMING_TOLERANCE_MS = 500  # Allow 500ms clock skew between client/server timing
 ENFORCE_MONOTONIC_PATH = _env_bool("ENFORCE_MONOTONIC_PATH", True)
 ENFORCE_SPEED_LIMITS = _env_bool("ENFORCE_SPEED_LIMITS", True)
 ENFORCE_MIN_DURATION = _env_bool("ENFORCE_MIN_DURATION", True)
@@ -92,13 +101,13 @@ MIN_DEVIATION_MEAN_FRAC = 0.02  # mean deviation must not be *too* perfect (as a
 MIN_DEVIATION_MAX_FRAC = 0.06  # max deviation must not be *too* perfect (as a fraction of tolerance)
 
 # Ballistic profile thresholds (human velocity curve: accel -> cruise -> decel)
-BALLISTIC_THIRD_RATIO_MIN = 0.7  # first third should have >= this fraction of peak speed
-BALLISTIC_FINAL_DECEL_MIN = 0.15  # final third speed should be at least this much slower than mid
+BALLISTIC_THIRD_RATIO_MIN = 0.5  # first third should have >= this fraction of peak speed (relaxed)
+BALLISTIC_FINAL_DECEL_MIN = 0.08  # final third speed should be at least this much slower than mid (relaxed)
 
 # Hesitation detection (micro-pauses at high-curvature points)
 HESITATION_PAUSE_MS_MIN = 40  # minimum pause duration to count as hesitation
 HESITATION_PAUSE_MS_MAX = 200  # maximum (longer is suspicious)
-HESITATION_MIN_COUNT = 1  # humans should have at least this many micro-pauses
+HESITATION_MIN_COUNT = 0  # disabled for now - some humans trace smoothly without pauses
 HESITATION_CURVATURE_PCTL = 0.7  # look for pauses near high-curvature regions (top 30%)
 
 POINTER_BEHAVIOR = {
@@ -109,13 +118,13 @@ POINTER_BEHAVIOR = {
         "min_accel_sign_changes": 2,
         "speed_const_ratio": 0.15,
         "max_accel_px_per_s2": 12000,
-        "min_dt_cv": 0.08,
-        "min_dd_cv": 0.08,
+        "min_dt_cv": 0.05,
+        "min_dd_cv": 0.05,
         "curvature_var_ratio_min": 1.15,
         "curvature_min_samples": 6,
-        "ballistic_third_ratio_min": 0.7,
-        "ballistic_final_decel_min": 0.15,
-        "hesitation_min_count": 1,
+        "ballistic_third_ratio_min": 0.5,
+        "ballistic_final_decel_min": 0.08,
+        "hesitation_min_count": 0,
     },
     "touch": {
         "max_speed_px_per_s": 1800,
@@ -124,13 +133,13 @@ POINTER_BEHAVIOR = {
         "min_accel_sign_changes": 2,
         "speed_const_ratio": 0.18,
         "max_accel_px_per_s2": 10000,
-        "min_dt_cv": 0.07,
-        "min_dd_cv": 0.07,
+        "min_dt_cv": 0.04,
+        "min_dd_cv": 0.04,
         "curvature_var_ratio_min": 1.15,
         "curvature_min_samples": 6,
-        "ballistic_third_ratio_min": 0.65,
-        "ballistic_final_decel_min": 0.12,
-        "hesitation_min_count": 1,
+        "ballistic_third_ratio_min": 0.45,
+        "ballistic_final_decel_min": 0.06,
+        "hesitation_min_count": 0,
     },
 }
 

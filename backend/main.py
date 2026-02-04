@@ -1,3 +1,4 @@
+import hashlib
 import json
 import math
 import random
@@ -28,6 +29,14 @@ def _challenge_tolerance(challenge_row: Dict, pointer_type: str) -> float:
     if pointer_type == "mouse":
         return float(challenge_row["tolerance_mouse"])
     return float(challenge_row["tolerance_touch"])
+
+
+def _compute_trajectory_hash(trajectory: List[models.TrajectorySample], nonce: str, challenge_id: str) -> str:
+    """Compute SHA-256 hash of trajectory data + nonce + challenge_id for client binding."""
+    # Normalize trajectory to prevent floating point differences
+    traj_str = "|".join(f"{s.x:.1f},{s.y:.1f},{s.t}" for s in trajectory)
+    data = f"{traj_str}:{nonce}:{challenge_id}"
+    return hashlib.sha256(data.encode()).hexdigest()[:32]  # First 32 chars
 
 
 def _speed_stats(traj: List[models.TrajectorySample]) -> Tuple[float, float]:
@@ -202,12 +211,25 @@ def peek_path(payload: models.PeekRequest):
             raise fastapi.HTTPException(status_code=400, detail="Peek backtrack too far")
 
     new_pos = max(last_pos, pos)
+
+    # Calculate cursor advancement since last peek
+    cursor_advance = max(0.0, pos - last_pos) if last_peek_at is not None else config.PEEK_DECAY_MIN_ADVANCE_PX
+
+    # Progressive decay: reduce lookahead if cursor hasn't advanced much
+    if config.ENFORCE_PEEK_DECAY and cursor_advance < config.PEEK_DECAY_MIN_ADVANCE_PX:
+        # Scale lookahead based on how much cursor advanced
+        advance_ratio = cursor_advance / config.PEEK_DECAY_MIN_ADVANCE_PX
+        decay_multiplier = config.PEEK_DECAY_FACTOR + (1 - config.PEEK_DECAY_FACTOR) * advance_ratio
+        effective_ahead = max(config.PEEK_DECAY_MIN_PX, config.PEEK_AHEAD_PX * decay_multiplier)
+    else:
+        effective_ahead = config.PEEK_AHEAD_PX
+
     db.update_peek_progress(payload.challengeId, new_pos, now, peek_count + 1)
 
     ahead_polyline = path.lookahead(
         points,
         cursor,
-        ahead=config.PEEK_AHEAD_PX,
+        ahead=effective_ahead,
         behind=config.PEEK_BEHIND_PX,
     )
     distance_to_end = path.distance_to_end(points, (payload.cursor[0], payload.cursor[1]))
@@ -246,6 +268,20 @@ def verify_attempt(payload: models.VerifyRequest):
         or claims.get("ttl") != ttl_ms
     ):
         raise fastapi.HTTPException(status_code=401, detail="Token mismatch")
+
+    # Verify trajectory hash if provided (client binding)
+    trajectory_hash_valid = True
+    if config.ENFORCE_TRAJECTORY_HASH:
+        if not payload.trajectoryHash:
+            raise fastapi.HTTPException(status_code=400, detail="Trajectory hash required")
+        expected_hash = _compute_trajectory_hash(payload.trajectory, payload.nonce, payload.challengeId)
+        if payload.trajectoryHash != expected_hash:
+            trajectory_hash_valid = False
+            raise fastapi.HTTPException(status_code=400, detail="Trajectory hash mismatch")
+    elif payload.trajectoryHash:
+        # Verify if provided even when not enforced (for gradual rollout)
+        expected_hash = _compute_trajectory_hash(payload.trajectory, payload.nonce, payload.challengeId)
+        trajectory_hash_valid = payload.trajectoryHash == expected_hash
 
     base_tolerance = (
         config.POINTER_CONFIG["mouse"]["tolerance_px"]
@@ -601,9 +637,9 @@ def verify_attempt(payload: models.VerifyRequest):
     elif config.ENFORCE_BEHAVIOURAL and too_perfect_flag:
         reason = "too_perfect"
         passed = False
-    # Only block on behavioural signals when there's strong evidence.
+    # Only block on behavioural signals when there's strong evidence (multiple signals).
     elif config.ENFORCE_BEHAVIOURAL and (
-        accel_flag
+        (accel_flag and regularity_flag)  # high accel alone is fine, needs regularity too
         or (speed_const_flag and regularity_flag)
         or (accel_sign_change_flag and regularity_flag)
         or (ballistic_flag and hesitation_flag)
@@ -706,6 +742,11 @@ def verify_attempt(payload: models.VerifyRequest):
             "curvatureCheckInconclusive": curvature_check_inconclusive,
             "curvatureContrastRad": curvature_contrast_rad,
             "peekCount": int(challenge_row["peek_count"]) if "peek_count" in row_keys and challenge_row["peek_count"] is not None else 0,
+            "peekEfficiency": (
+                (int(challenge_row["peek_count"]) / max(1, float(challenge_row["path_length"]) / 100))
+                if "peek_count" in row_keys and challenge_row["peek_count"] is not None
+                else None
+            ),
             "ballisticFlag": ballistic_flag,
             "ballisticFirstRatio": ballistic_first_ratio,
             "ballisticFinalRatio": ballistic_final_ratio,

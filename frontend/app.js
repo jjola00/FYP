@@ -12,6 +12,17 @@ const config = {
   minSamples: 20,
 };
 
+// Compute trajectory hash for client binding (SHA-256, first 32 chars)
+async function computeTrajectoryHash(trajectory, nonce, challengeId) {
+  const trajStr = trajectory.map(s => `${s.x.toFixed(1)},${s.y.toFixed(1)},${s.t}`).join("|");
+  const data = `${trajStr}:${nonce}:${challengeId}`;
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(data));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  return hashHex.slice(0, 32);
+}
+
 const ui = {
   canvas: document.getElementById("captcha-canvas"),
   status: document.getElementById("status"),
@@ -328,6 +339,14 @@ async function verifyAttempt() {
 
   setStatus("Verifying...");
   try {
+    // Compute trajectory hash for client binding
+    const trajectoryHash = await computeTrajectoryHash(
+      state.trajectory,
+      state.nonce,
+      state.challenge.challengeId
+    );
+    const clientTimingMs = performance.now() - state.startTs;
+
     const body = {
       challengeId: state.challenge.challengeId,
       nonce: state.nonce,
@@ -338,6 +357,8 @@ async function verifyAttempt() {
       browserFamily: navigator.userAgent,
       devicePixelRatio: state.devicePixelRatio,
       trajectory: state.trajectory,
+      trajectoryHash,
+      clientTimingMs,
     };
     const res = await fetch(`${API_BASE}/captcha/line/verify`, {
       method: "POST",

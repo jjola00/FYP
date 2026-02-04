@@ -48,6 +48,8 @@ class VerifyRequest(BaseModel):
     browserFamily: Optional[str] = None
     devicePixelRatio: Optional[float] = None
     trajectory: List[TrajectorySample]
+    trajectoryHash: Optional[str] = None  # Client-computed hash for binding
+    clientTimingMs: Optional[float] = None  # Client-reported total duration
 
     @validator("trajectory")
     def trajectory_has_samples(cls, v: List[TrajectorySample]) -> List[TrajectorySample]:
