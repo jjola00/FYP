@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { 
-  config, 
-  Challenge, 
-  TrajectoryPoint, 
-  fetchLookahead, 
-  verifyAttempt, 
-  computeTrajectoryHash 
+import {
+  captchaConfig,
+  Challenge,
+  TrajectoryPoint,
+  fetchLookahead,
+  verifyAttempt,
+  computeTrajectoryHash
 } from '@/lib/api';
 
 interface CaptchaCanvasProps {
@@ -169,10 +169,10 @@ export function CaptchaCanvas({
     const tol = challenge?.tolerance;
     const dpr = state.devicePixelRatio || 1;
     if (profile === "mouse") {
-      const base = tol?.mouse ? Math.max(3, Math.min(8, tol.mouse * 0.4)) : config.lineWidthMouse;
+      const base = tol?.mouse ? Math.max(3, Math.min(8, tol.mouse * 0.4)) : captchaConfig.lineWidthMouse;
       return base * (dpr >= 2 ? 1.15 : 1);
     }
-    const base = tol?.touch ? Math.max(6, Math.min(10, tol.touch * 0.35)) : config.lineWidthTouch;
+    const base = tol?.touch ? Math.max(6, Math.min(10, tol.touch * 0.35)) : captchaConfig.lineWidthTouch;
     return base * (dpr >= 2 ? 1.15 : 1);
   };
 
@@ -286,7 +286,7 @@ export function CaptchaCanvas({
       const prev = state.segments[i - 1];
       const curr = state.segments[i];
       const age = now - curr.createdAt;
-      const alpha = Math.max(0, 1 - age / (config.trailVisibleMs + config.trailFadeMs));
+      const alpha = Math.max(0, 1 - age / (captchaConfig.trailVisibleMs + captchaConfig.trailFadeMs));
       if (alpha <= 0) continue;
 
       const midX = (prev.x + curr.x) / 2;
@@ -314,7 +314,7 @@ export function CaptchaCanvas({
   const verifyAttemptHandler = useCallback(async () => {
     if (!challenge || state.trajectory.length < 2) return;
     
-    if (state.trajectory.length < config.minSamples) {
+    if (state.trajectory.length < captchaConfig.minSamples) {
       onStatusChange("Captcha incompleted.", "error");
       setState(prev => ({ ...prev, needsReset: true }));
       if (state.timerHandle) clearInterval(state.timerHandle);
@@ -534,8 +534,8 @@ export function CaptchaCanvas({
   return (
     <canvas
       ref={canvasRef}
-      width={config.canvasWidth}
-      height={config.canvasHeight}
+      width={captchaConfig.canvasWidth}
+      height={captchaConfig.canvasHeight}
       className="rounded-lg border-2 border-accent bg-muted/50 w-full h-full touch-none"
       aria-label="CAPTCHA challenge area"
       onPointerDown={handlePointerDown}
