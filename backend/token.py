@@ -3,7 +3,7 @@ import hmac
 import json
 from typing import Any, Dict
 
-from . import config
+import config
 
 
 def _b64encode(data: bytes) -> str:

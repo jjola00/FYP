@@ -2,7 +2,7 @@ import math
 import random
 from typing import List, Tuple
 
-from . import config
+import config
 
 Point = Tuple[float, float]
 

@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import config
+import config
 
 
 def _get_conn() -> sqlite3.Connection:

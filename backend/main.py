@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config, db, models, path, token
+import config, db, models, path, token
 
 app = fastapi.FastAPI(title="Ephemeral Line CAPTCHA")
 
