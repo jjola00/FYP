@@ -1,7 +1,7 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
-// Request timeout in milliseconds
-const REQUEST_TIMEOUT_MS = 10000;
+// Request timeout in milliseconds (60s to handle Render free tier cold starts)
+const REQUEST_TIMEOUT_MS = 60000;
 
 export const captchaConfig = {
   canvasWidth: 400,

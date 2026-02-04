@@ -2,7 +2,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, validator
 
-import config
+from . import config
 
 
 class TrajectorySample(BaseModel):
