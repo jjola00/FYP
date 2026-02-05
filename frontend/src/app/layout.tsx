@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: 'CAPTCHA Crucible',
+  title: 'Beyond Recognition',
   description: 'A responsive UI shell for a dual-CAPTCHA research project.',
 };
 
