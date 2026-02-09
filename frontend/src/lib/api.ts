@@ -153,3 +153,85 @@ export async function fetchLookahead(
 
   return await res.json();
 }
+
+// ─── Image CAPTCHA (line intersection click challenge) ──────────────────
+
+export interface ImageLineDefinition {
+  type: "straight" | "quadratic" | "cubic";
+  points: number[][];
+  colour: string;
+  thickness: number;
+  opacity?: number | null;
+}
+
+export interface ImageDistractorShape {
+  kind: "circle" | "rectangle";
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  colour: string;
+  opacity: number;
+  strokeWidth: number;
+}
+
+export interface ImageChallenge {
+  challengeId: string;
+  token: string;
+  ttlMs: number;
+  expiresAt: number;
+  lines: ImageLineDefinition[];
+  distractors: ImageLineDefinition[];
+  shapes: ImageDistractorShape[];
+  canvas: {
+    width: number;
+    height: number;
+    background: string;
+  };
+  instruction: string;
+  numIntersections: number;
+  difficulty: string;
+}
+
+export interface ImageVerifyResponse {
+  passed: boolean;
+  reason: string;
+  matched: number;
+  expected: number;
+  excess: number;
+  tooFast: boolean;
+}
+
+export async function fetchImageChallenge(): Promise<ImageChallenge> {
+  const res = await fetchWithTimeout(`${API_BASE}/captcha/image/generate`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Failed to fetch image challenge: HTTP ${res.status}${text ? ` - ${text}` : ""}`);
+  }
+  return await res.json();
+}
+
+export async function verifyImageAttempt(
+  challenge: ImageChallenge,
+  clicks: Array<{ x: number; y: number }>
+): Promise<ImageVerifyResponse> {
+  const res = await fetchWithTimeout(`${API_BASE}/captcha/image/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      challengeId: challenge.challengeId,
+      token: challenge.token,
+      clicks,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Image verification failed: HTTP ${res.status}${text ? ` - ${text}` : ""}`);
+  }
+
+  return await res.json();
+}

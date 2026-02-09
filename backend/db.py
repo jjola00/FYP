@@ -16,6 +16,23 @@ def _get_conn() -> sqlite3.Connection:
 
 def init_db() -> None:
     with _get_conn() as conn:
+        # ── Image CAPTCHA challenges ─────────────────────────────
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS image_challenges (
+                id TEXT PRIMARY KEY,
+                intersections_json TEXT NOT NULL,
+                num_intersections INTEGER NOT NULL,
+                difficulty TEXT NOT NULL,
+                ttl_ms INTEGER NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+        # ── Line CAPTCHA challenges ──────────────────────────────
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS challenges (
@@ -286,5 +303,48 @@ def update_peek_progress(
         conn.execute(
             "UPDATE challenges SET peek_pos = ?, last_peek_at = ?, peek_count = ? WHERE id = ?",
             (peek_pos, last_peek_at, peek_count, challenge_id),
+        )
+        conn.commit()
+
+
+# ─── Image CAPTCHA helpers ───────────────────────────────────────────────
+
+
+def save_image_challenge(
+    challenge_id: str,
+    intersections: List[List[float]],
+    num_intersections: int,
+    difficulty: str,
+    ttl_ms: int,
+) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO image_challenges (id, intersections_json, num_intersections, difficulty, ttl_ms, used, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?)
+            """,
+            (
+                challenge_id,
+                json.dumps(intersections),
+                num_intersections,
+                difficulty,
+                ttl_ms,
+                time.time(),
+            ),
+        )
+        conn.commit()
+
+
+def get_image_challenge(challenge_id: str) -> Optional[sqlite3.Row]:
+    with _get_conn() as conn:
+        return conn.execute(
+            "SELECT * FROM image_challenges WHERE id = ?", (challenge_id,)
+        ).fetchone()
+
+
+def mark_image_challenge_used(challenge_id: str) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            "UPDATE image_challenges SET used = 1 WHERE id = ?", (challenge_id,)
         )
         conn.commit()

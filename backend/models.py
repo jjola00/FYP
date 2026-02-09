@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -70,3 +70,60 @@ class VerifyResponse(BaseModel):
     thresholds: dict
     metrics: dict = Field(default_factory=dict)
     expiresAt: float
+
+
+# ─── Image CAPTCHA models ────────────────────────────────────────────────
+
+
+class ImageLineDefinition(BaseModel):
+    type: Literal["straight", "quadratic", "cubic"]
+    points: List[List[float]]
+    colour: str
+    thickness: float
+    opacity: Optional[float] = None  # None → 1.0 on client
+
+
+class ImageDistractorShape(BaseModel):
+    kind: Literal["circle", "rectangle"]
+    x: float
+    y: float
+    width: Optional[float] = None
+    height: Optional[float] = None
+    radius: Optional[float] = None
+    colour: str
+    opacity: float
+    strokeWidth: float
+
+
+class ImageNewChallengeResponse(BaseModel):
+    challengeId: str
+    token: str
+    ttlMs: int
+    expiresAt: float
+    lines: List[ImageLineDefinition]
+    distractors: List[ImageLineDefinition] = []
+    shapes: List[ImageDistractorShape] = []
+    canvas: Dict[str, Any]
+    instruction: str
+    numIntersections: int
+    difficulty: str
+
+
+class ImageClickCoordinate(BaseModel):
+    x: float
+    y: float
+
+
+class ImageVerifyRequest(BaseModel):
+    challengeId: str
+    token: str
+    clicks: List[ImageClickCoordinate]
+
+
+class ImageVerifyResponse(BaseModel):
+    passed: bool
+    reason: str
+    matched: int
+    expected: int
+    excess: int
+    tooFast: bool

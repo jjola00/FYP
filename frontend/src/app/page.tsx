@@ -11,16 +11,22 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CaptchaCanvas } from "@/components/captcha-canvas";
-import { Challenge, fetchChallenge } from "@/lib/api";
+import { ImageCaptchaCanvas } from "@/components/image-captcha-canvas";
+import {
+  Challenge,
+  ImageChallenge,
+  fetchChallenge,
+  fetchImageChallenge,
+} from "@/lib/api";
 
-const CAPTCHA_INSTRUCTIONS = {
-  line: "Press/touch the blue start point and follow the line as it appears. Do not lift until done.",
-  visual: "Click the single unique abstract puzzle piece.",
-};
+const LINE_INSTRUCTION =
+  "Press/touch the blue start point and follow the line as it appears. Do not lift until done.";
 
 export default function CaptchaPage() {
-  const [instruction, setInstruction] = useState(CAPTCHA_INSTRUCTIONS.line);
+  const [activeTab, setActiveTab] = useState<"line" | "visual">("line");
+  const [instruction, setInstruction] = useState(LINE_INSTRUCTION);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [imageChallenge, setImageChallenge] = useState<ImageChallenge | null>(null);
   const [statusText, setStatusText] = useState("");
   const [statusTone, setStatusTone] = useState<"info" | "error" | "success">("info");
   const [timer, setTimer] = useState("Time: --");
@@ -36,19 +42,25 @@ export default function CaptchaPage() {
   };
 
   const handleChallengeComplete = (success: boolean) => {
-    // Could add analytics or other completion handling here
     console.log("Challenge completed:", success ? "passed" : "failed");
   };
 
-  const handleNewChallenge = async () => {
+  const loadChallenge = async (tab: "line" | "visual") => {
     setIsLoading(true);
     setStatusText("");
     setStatusTone("info");
     setTimer("Time: --");
 
     try {
-      const newChallenge = await fetchChallenge();
-      setChallenge(newChallenge);
+      if (tab === "line") {
+        const newChallenge = await fetchChallenge();
+        setChallenge(newChallenge);
+        setInstruction(LINE_INSTRUCTION);
+      } else {
+        const newChallenge = await fetchImageChallenge();
+        setImageChallenge(newChallenge);
+        setInstruction(newChallenge.instruction);
+      }
       setStatusText("");
       setStatusTone("info");
     } catch (error) {
@@ -60,18 +72,17 @@ export default function CaptchaPage() {
     }
   };
 
+  const handleNewChallenge = () => loadChallenge(activeTab);
+
   const handleTabChange = (value: string) => {
-    if (value === "line" || value === "visual") {
-      setInstruction(CAPTCHA_INSTRUCTIONS[value as keyof typeof CAPTCHA_INSTRUCTIONS]);
-      if (value === "line") {
-        handleNewChallenge();
-      }
-    }
+    const tab = value as "line" | "visual";
+    setActiveTab(tab);
+    loadChallenge(tab);
   };
 
   // Load initial challenge
   useEffect(() => {
-    handleNewChallenge();
+    loadChallenge("line");
   }, []);
 
   return (
@@ -93,33 +104,51 @@ export default function CaptchaPage() {
           >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="line">Line CAPTCHA</TabsTrigger>
-              <TabsTrigger value="visual" disabled>Visual CAPTCHA</TabsTrigger>
+              <TabsTrigger value="visual">Visual CAPTCHA</TabsTrigger>
             </TabsList>
           </Tabs>
 
           <div className="mt-4 sm:mt-6 flex flex-col items-center gap-4">
-            <div className="relative w-full max-w-[350px] aspect-square">
-              {challenge ? (
-                <CaptchaCanvas
-                  challenge={challenge}
-                  onStatusChange={handleStatusChange}
-                  onTimerChange={handleTimerChange}
-                  onChallengeComplete={handleChallengeComplete}
-                />
-              ) : (
-                <div className="rounded-lg border-2 border-accent bg-muted/50 w-full h-full flex items-center justify-center">
-                  <p className="text-muted-foreground">Loading challenge...</p>
-                </div>
-              )}
-            </div>
+            {activeTab === "line" ? (
+              <div className="relative w-full max-w-[350px] aspect-square">
+                {challenge ? (
+                  <CaptchaCanvas
+                    challenge={challenge}
+                    onStatusChange={handleStatusChange}
+                    onTimerChange={handleTimerChange}
+                    onChallengeComplete={handleChallengeComplete}
+                  />
+                ) : (
+                  <div className="rounded-lg border-2 border-accent bg-muted/50 w-full h-full flex items-center justify-center">
+                    <p className="text-muted-foreground">Loading challenge...</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative w-full max-w-[350px]">
+                {imageChallenge ? (
+                  <ImageCaptchaCanvas
+                    challenge={imageChallenge}
+                    onStatusChange={handleStatusChange}
+                    onTimerChange={handleTimerChange}
+                    onChallengeComplete={handleChallengeComplete}
+                    onRequestNew={() => loadChallenge("visual")}
+                  />
+                ) : (
+                  <div className="rounded-lg border-2 border-accent bg-muted/50 w-full aspect-square flex items-center justify-center">
+                    <p className="text-muted-foreground">Loading challenge...</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <p className="flex min-h-[3rem] items-center text-center text-sm text-muted-foreground sm:min-h-[2.5rem]">
               {instruction}
             </p>
 
             <div className="flex w-full items-center justify-between gap-4 border-t border-border pt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleNewChallenge}
                 disabled={isLoading}
               >

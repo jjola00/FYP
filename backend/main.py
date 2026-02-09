@@ -25,6 +25,9 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
+from .image_routes import router as image_router
+app.include_router(image_router)
+
 db.init_db()
 
 
