@@ -31,19 +31,19 @@ REQUIRED_COVERAGE_RATIO = 0.75  # 70–80% allowed; default to 75%
 MIN_SAMPLES = 20
 
 # Peek behavior
-PEEK_AHEAD_PX = 40
-PEEK_BEHIND_PX = 8
-PEEK_MIN_INTERVAL_MS = 100  # cap peek rate to ~10/s
-PEEK_MAX_COUNT = 120
-PEEK_MAX_ADVANCE_PX_PER_S = 800
-PEEK_ADVANCE_MARGIN_PX = 20
+PEEK_AHEAD_PX = 90
+PEEK_BEHIND_PX = 12
+PEEK_MIN_INTERVAL_MS = 80  # cap peek rate to ~12/s
+PEEK_MAX_COUNT = 200
+PEEK_MAX_ADVANCE_PX_PER_S = 1200
+PEEK_ADVANCE_MARGIN_PX = 35
 PEEK_DISTANCE_FACTOR = 1.2
 PROGRESS_BACKTRACK_PX = 10
 
 # Peek decay - reduce lookahead if cursor hasn't advanced much
-PEEK_DECAY_MIN_ADVANCE_PX = 15  # need this much advance to get full lookahead
-PEEK_DECAY_FACTOR = 0.5  # multiply lookahead by this when no advance
-PEEK_DECAY_MIN_PX = 12  # minimum lookahead even with full decay
+PEEK_DECAY_MIN_ADVANCE_PX = 10  # need this much advance to get full lookahead
+PEEK_DECAY_FACTOR = 0.6  # multiply lookahead by this when no advance
+PEEK_DECAY_MIN_PX = 30  # minimum lookahead even with full decay
 PEEK_EFFICIENCY_WARN_RATIO = 3.0  # warn if peeks/distance exceeds this
 
 # Enforcement toggles (for ablation testing)

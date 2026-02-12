@@ -35,92 +35,88 @@ export function CaptchaCanvas({
   isAttemptInProgressRef,
 }: CaptchaCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [state, setState] = useState({
-    drawing: false,
-    expired: false,
-    solved: false,
-    needsReset: false,
-    startTs: 0,
-    trajectory: [] as TrajectoryPoint[],
-    segments: [] as CanvasSegment[],
-    pointerProfile: "mouse" as "mouse" | "touch",
-    lookahead: [] as [number, number][],
-    lastPeekAt: 0,
-    peekMinIntervalMs: 100,
-    peekBlockedUntil: 0,
-    finishPoint: null as [number, number] | null,
-    showFinish: false,
-    devicePixelRatio: (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1,
-    distanceToEnd: null as number | null,
-    timerHandle: null as NodeJS.Timeout | null,
-    expiresAtMs: 0,
-  });
+
+  // High-frequency data stored in refs to avoid React re-renders on every pointer move
+  const trajectoryRef = useRef<TrajectoryPoint[]>([]);
+  const segmentsRef = useRef<CanvasSegment[]>([]);
+  const lookaheadRef = useRef<[number, number][]>([]);
+  const drawingRef = useRef(false);
+  const startTsRef = useRef(0);
+  const pointerProfileRef = useRef<"mouse" | "touch">("mouse");
+  const lastPeekAtRef = useRef(0);
+  const peekMinIntervalRef = useRef(80);
+  const peekBlockedUntilRef = useRef(0);
+  const finishPointRef = useRef<[number, number] | null>(null);
+  const showFinishRef = useRef(false);
+  const distanceToEndRef = useRef<number | null>(null);
+  const peekInFlightRef = useRef(false);
+
+  // Low-frequency state that actually needs re-renders
+  const [solved, setSolved] = useState(false);
+  const [needsReset, setNeedsReset] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const timerHandleRef = useRef<NodeJS.Timeout | null>(null);
+  const dpr = useRef((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1);
 
   // Timer effect
   useEffect(() => {
     if (!challenge) return;
-    
-    setState(prev => ({ ...prev, expiresAtMs: challenge.expiresAt * 1000 }));
-    
-    const timerHandle = setInterval(() => {
-      if (state.solved || state.needsReset) {
-        clearInterval(timerHandle);
+
+    const handle = setInterval(() => {
+      if (solved || needsReset) {
+        clearInterval(handle);
         return;
       }
-      
+
       const now = Date.now();
       const remaining = Math.max(0, challenge.expiresAt * 1000 - now);
       onTimerChange(remaining ? `${Math.ceil(remaining / 1000)}s` : "");
-      
+
       if (remaining <= 0) {
-        setState(prev => ({ 
-          ...prev, 
-          expired: true, 
-          drawing: false, 
-          needsReset: true 
-        }));
+        setExpired(true);
+        drawingRef.current = false;
+        setNeedsReset(true);
         onStatusChange("Too slow.", "error");
-        clearInterval(timerHandle);
+        clearInterval(handle);
       }
     }, 200);
-    
-    setState(prev => ({ ...prev, timerHandle }));
-    
-    return () => {
-      clearInterval(timerHandle);
-    };
-  }, [challenge, state.solved, state.needsReset]);
 
-  // Reset state when challenge changes
+    timerHandleRef.current = handle;
+
+    return () => {
+      clearInterval(handle);
+    };
+  }, [challenge, solved, needsReset]);
+
+  // Reset when challenge changes
   useEffect(() => {
     if (challenge) {
-      setState(prev => ({
-        ...prev,
-        drawing: false,
-        expired: false,
-        solved: false,
-        needsReset: false,
-        trajectory: [],
-        segments: [],
-        lookahead: [],
-        finishPoint: null,
-        showFinish: false,
-        distanceToEnd: null,
-      }));
+      trajectoryRef.current = [];
+      segmentsRef.current = [];
+      lookaheadRef.current = [];
+      drawingRef.current = false;
+      startTsRef.current = 0;
+      lastPeekAtRef.current = 0;
+      peekMinIntervalRef.current = 80;
+      peekBlockedUntilRef.current = 0;
+      finishPointRef.current = null;
+      showFinishRef.current = false;
+      distanceToEndRef.current = null;
+      peekInFlightRef.current = false;
+      setSolved(false);
+      setNeedsReset(false);
+      setExpired(false);
       onTimerChange("");
-      if (state.timerHandle) {
-        clearInterval(state.timerHandle);
+      if (timerHandleRef.current) {
+        clearInterval(timerHandleRef.current);
       }
       // Prime lookahead at start point
       fetchLookahead(challenge, challenge.startPoint[0], challenge.startPoint[1])
         .then(data => {
-          setState(prev => ({
-            ...prev,
-            lookahead: data.ahead,
-            distanceToEnd: data.distanceToEnd,
-            showFinish: Boolean(data.finish),
-            finishPoint: data.finish || null,
-          }));
+          lookaheadRef.current = data.ahead;
+          distanceToEndRef.current = data.distanceToEnd;
+          showFinishRef.current = Boolean(data.finish);
+          finishPointRef.current = data.finish || null;
         })
         .catch(() => {});
     }
@@ -130,11 +126,11 @@ export function CaptchaCanvas({
   useEffect(() => {
     if (isAttemptInProgressRef) {
       isAttemptInProgressRef.current = () =>
-        (state.drawing || state.trajectory.length > 0) &&
-        !state.solved &&
-        !state.needsReset;
+        (drawingRef.current || trajectoryRef.current.length > 0) &&
+        !solved &&
+        !needsReset;
     }
-  }, [isAttemptInProgressRef, state.drawing, state.trajectory.length, state.solved, state.needsReset]);
+  }, [isAttemptInProgressRef, solved, needsReset]);
 
   const formatFailureReason = (reason?: string) => {
     switch (reason) {
@@ -179,13 +175,13 @@ export function CaptchaCanvas({
 
   const lineWidthForProfile = (profile: "mouse" | "touch"): number => {
     const tol = challenge?.tolerance;
-    const dpr = state.devicePixelRatio || 1;
+    const d = dpr.current;
     if (profile === "mouse") {
       const base = tol?.mouse ? Math.max(3, Math.min(8, tol.mouse * 0.4)) : captchaConfig.lineWidthMouse;
-      return base * (dpr >= 2 ? 1.15 : 1);
+      return base * (d >= 2 ? 1.15 : 1);
     }
     const base = tol?.touch ? Math.max(6, Math.min(10, tol.touch * 0.35)) : captchaConfig.lineWidthTouch;
-    return base * (dpr >= 2 ? 1.15 : 1);
+    return base * (d >= 2 ? 1.15 : 1);
   };
 
   const distanceToPath = (px: number, py: number, path: [number, number][]): number => {
@@ -230,110 +226,124 @@ export function CaptchaCanvas({
     };
   };
 
-  const clearCanvas = useCallback(() => {
+  // ── Drawing functions (read directly from refs, no React state) ──
+
+  const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Use dark background instead of transparent
+
+    // Clear
     ctx.fillStyle = "#0a0f1d";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, []);
 
-  const drawGuideLine = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !state.lookahead.length) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.save();
-    ctx.strokeStyle = "rgba(129, 140, 248, 0.9)";
-    ctx.lineWidth = 3.5;
-    ctx.setLineDash([10, 5]);
-    ctx.beginPath();
-    ctx.moveTo(state.lookahead[0][0], state.lookahead[0][1]);
-    for (let i = 1; i < state.lookahead.length; i++) {
-      ctx.lineTo(state.lookahead[i][0], state.lookahead[i][1]);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }, [state.lookahead]);
-
-  const drawMarkers = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !challenge) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.save();
-    // Draw start marker (bright + pulsing-like glow)
-    const start = challenge.startPoint;
-    ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
-    ctx.beginPath();
-    ctx.arc(start[0], start[1], 16, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.fillStyle = "rgba(56, 189, 248, 1.0)";
-    ctx.beginPath();
-    ctx.arc(start[0], start[1], 10, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Draw finish marker if visible
-    if (state.showFinish && state.finishPoint) {
-      ctx.fillStyle = "rgba(34, 197, 94, 0.8)";
+    // Guide line
+    const la = lookaheadRef.current;
+    if (la.length >= 2) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(129, 140, 248, 0.9)";
+      ctx.lineWidth = 3.5;
+      ctx.setLineDash([10, 5]);
       ctx.beginPath();
-      ctx.arc(state.finishPoint[0], state.finishPoint[1], 8, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-    ctx.restore();
-  }, [challenge, state.showFinish, state.finishPoint]);
-
-  const drawSegments = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || state.segments.length < 2) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const now = performance.now();
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    for (let i = 1; i < state.segments.length; i++) {
-      const prev = state.segments[i - 1];
-      const curr = state.segments[i];
-      const age = now - curr.createdAt;
-      const alpha = Math.max(0, 1 - age / (captchaConfig.trailVisibleMs + captchaConfig.trailFadeMs));
-      if (alpha <= 0) continue;
-
-      const midX = (prev.x + curr.x) / 2;
-      const midY = (prev.y + curr.y) / 2;
-      const deviation = curr.deviation ?? 0;
-      const tolerance = curr.tolerance ?? 20;
-      ctx.strokeStyle = getStrokeColor(deviation, tolerance, alpha);
-      ctx.lineWidth = curr.lineWidth;
-      ctx.beginPath();
-      ctx.moveTo(prev.x, prev.y);
-      ctx.quadraticCurveTo(prev.x, prev.y, midX, midY);
+      ctx.moveTo(la[0][0], la[0][1]);
+      for (let i = 1; i < la.length; i++) {
+        ctx.lineTo(la[i][0], la[i][1]);
+      }
       ctx.stroke();
+      ctx.restore();
     }
 
-    ctx.restore();
-  }, [state.segments]);
+    // Markers
+    if (challenge) {
+      ctx.save();
+      const start = challenge.startPoint;
+      ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
+      ctx.beginPath();
+      ctx.arc(start[0], start[1], 16, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.fillStyle = "rgba(56, 189, 248, 1.0)";
+      ctx.beginPath();
+      ctx.arc(start[0], start[1], 10, 0, 2 * Math.PI);
+      ctx.fill();
 
-  const drawFrame = useCallback(() => {
-    clearCanvas();
-    drawGuideLine();
-    drawMarkers();
-    drawSegments();
-  }, [clearCanvas, drawGuideLine, drawMarkers, drawSegments]);
+      if (showFinishRef.current && finishPointRef.current) {
+        ctx.fillStyle = "rgba(34, 197, 94, 0.8)";
+        ctx.beginPath();
+        ctx.arc(finishPointRef.current[0], finishPointRef.current[1], 8, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Segments (trail)
+    const segs = segmentsRef.current;
+    if (segs.length >= 2) {
+      const now = performance.now();
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      for (let i = 1; i < segs.length; i++) {
+        const prev = segs[i - 1];
+        const curr = segs[i];
+        const age = now - curr.createdAt;
+        const alpha = Math.max(0, 1 - age / (captchaConfig.trailVisibleMs + captchaConfig.trailFadeMs));
+        if (alpha <= 0) continue;
+
+        const midX = (prev.x + curr.x) / 2;
+        const midY = (prev.y + curr.y) / 2;
+        const deviation = curr.deviation ?? 0;
+        const tolerance = curr.tolerance ?? 20;
+        ctx.strokeStyle = getStrokeColor(deviation, tolerance, alpha);
+        ctx.lineWidth = curr.lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.quadraticCurveTo(prev.x, prev.y, midX, midY);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+  }, [challenge]);
+
+  const fetchPeek = useCallback((x: number, y: number, force = false) => {
+    const now = performance.now();
+    if (!force && now < peekBlockedUntilRef.current) return;
+    if (!force && now - lastPeekAtRef.current < peekMinIntervalRef.current) return;
+    if (peekInFlightRef.current && !force) return;
+
+    lastPeekAtRef.current = now;
+    if (!challenge) return;
+
+    peekInFlightRef.current = true;
+    fetchLookahead(challenge, x, y)
+      .then(data => {
+        lookaheadRef.current = data.ahead;
+        distanceToEndRef.current = data.distanceToEnd;
+        showFinishRef.current = Boolean(data.finish);
+        finishPointRef.current = data.finish || null;
+        peekMinIntervalRef.current = Math.max(80, peekMinIntervalRef.current - 5);
+      })
+      .catch((err: any) => {
+        if (err?.message?.includes("429")) {
+          peekMinIntervalRef.current = Math.min(300, peekMinIntervalRef.current + 30);
+          peekBlockedUntilRef.current = now + peekMinIntervalRef.current;
+        }
+      })
+      .finally(() => {
+        peekInFlightRef.current = false;
+      });
+  }, [challenge]);
 
   const verifyAttemptHandler = useCallback(async () => {
-    if (!challenge || state.trajectory.length < 2) return;
-    
-    if (state.trajectory.length < captchaConfig.minSamples) {
+    const trajectory = trajectoryRef.current;
+    if (!challenge || trajectory.length < 2) return;
+
+    if (trajectory.length < captchaConfig.minSamples) {
       onStatusChange("Captcha incompleted.", "error");
-      setState(prev => ({ ...prev, needsReset: true }));
-      if (state.timerHandle) clearInterval(state.timerHandle);
+      setNeedsReset(true);
+      if (timerHandleRef.current) clearInterval(timerHandleRef.current);
       onTimerChange("");
       return;
     }
@@ -341,90 +351,58 @@ export function CaptchaCanvas({
     onStatusChange("Verifying...");
     try {
       const trajectoryHash = await computeTrajectoryHash(
-        state.trajectory,
+        trajectory,
         challenge.nonce,
         challenge.challengeId
       );
-      const clientTimingMs = performance.now() - state.startTs;
+      const clientTimingMs = performance.now() - startTsRef.current;
 
       const data = await verifyAttempt(
         challenge,
-        state.trajectory,
-        state.pointerProfile,
+        trajectory,
+        pointerProfileRef.current,
         clientTimingMs,
         trajectoryHash
       );
 
       if (data.passed) {
-        setState(prev => ({ ...prev, solved: true }));
-        if (state.timerHandle) clearInterval(state.timerHandle);
+        setSolved(true);
+        if (timerHandleRef.current) clearInterval(timerHandleRef.current);
         onTimerChange("");
         onStatusChange("Passed.", "success");
         onChallengeComplete(true);
       } else {
         if (data.reason === "timeout") {
-          setState(prev => ({ 
-            ...prev, 
-            expired: true, 
-            needsReset: true 
-          }));
-          if (state.timerHandle) clearInterval(state.timerHandle);
+          setExpired(true);
+          setNeedsReset(true);
+          if (timerHandleRef.current) clearInterval(timerHandleRef.current);
           onStatusChange("Too slow.", "error");
         } else {
           onStatusChange(formatFailureReason(data.reason), "error");
-          setState(prev => ({ ...prev, needsReset: true }));
-          if (state.timerHandle) clearInterval(state.timerHandle);
+          setNeedsReset(true);
+          if (timerHandleRef.current) clearInterval(timerHandleRef.current);
           onTimerChange("");
         }
         onChallengeComplete(false);
       }
-    } catch (err) {
+    } catch {
       onStatusChange("Verification error.", "error");
       onChallengeComplete(false);
     }
-  }, [challenge, state.trajectory, state.startTs, state.pointerProfile, state.timerHandle, onStatusChange, onTimerChange, onChallengeComplete]);
-
-  const fetchLookaheadHandler = useCallback(async (x: number, y: number, force = false) => {
-    const now = performance.now();
-    if (!force && now < state.peekBlockedUntil) return;
-    if (!force && now - state.lastPeekAt < state.peekMinIntervalMs) return;
-    
-    setState(prev => ({ ...prev, lastPeekAt: now }));
-    if (!challenge) return;
-    
-    try {
-      const data = await fetchLookahead(challenge, x, y);
-      setState(prev => ({
-        ...prev,
-        lookahead: data.ahead,
-        distanceToEnd: data.distanceToEnd,
-        showFinish: Boolean(data.finish),
-        finishPoint: data.finish || null,
-        peekMinIntervalMs: Math.max(100, prev.peekMinIntervalMs - 5),
-      }));
-    } catch (err: any) {
-      if (err.message.includes("429")) {
-        setState(prev => ({
-          ...prev,
-          peekMinIntervalMs: Math.min(250, prev.peekMinIntervalMs + 25),
-          peekBlockedUntil: now + prev.peekMinIntervalMs,
-        }));
-      }
-    }
-  }, [challenge, state.peekBlockedUntil, state.lastPeekAt, state.peekMinIntervalMs]);
+  }, [challenge, onStatusChange, onTimerChange, onChallengeComplete]);
 
   const handlePointerDown = useCallback((evt: React.PointerEvent<HTMLCanvasElement>) => {
     evt.preventDefault();
     if (!challenge) return;
-    if (state.solved) {
+    if (solved) {
       onStatusChange("Passed. Click New Challenge.", "success");
       return;
     }
-    if (state.needsReset) return;
-    
+    if (needsReset) return;
+
     const now = Date.now();
-    if (state.expired || now > challenge.expiresAt * 1000) {
-      setState(prev => ({ ...prev, expired: true }));
+    if (expired || now > challenge.expiresAt * 1000) {
+      setExpired(true);
       onStatusChange("Too slow.", "error");
       return;
     }
@@ -437,102 +415,98 @@ export function CaptchaCanvas({
       const dist = Math.hypot(offsetX - start[0], offsetY - start[1]);
       const tol = profile === "mouse" ? challenge.tolerance.mouse : challenge.tolerance.touch;
       const startRadius = tol * 1.25;
-      
+
       if (dist > startRadius) {
         onStatusChange("Start on the blue dot.", "error");
         return;
       }
-      
+
       const lineWidth = lineWidthForProfile(profile);
-      const startTs = performance.now();
-      
-      setState(prev => ({
-        ...prev,
-        drawing: true,
-        startTs,
-        trajectory: [{ x: offsetX, y: offsetY, t: 0 }],
-        segments: [{
-          x: offsetX,
-          y: offsetY,
-          createdAt: performance.now(),
-          lineWidth,
-        }],
-        pointerProfile: profile,
-      }));
-      
+      const ts = performance.now();
+
+      pointerProfileRef.current = profile;
+      startTsRef.current = ts;
+      drawingRef.current = true;
+      trajectoryRef.current = [{ x: offsetX, y: offsetY, t: 0 }];
+      segmentsRef.current = [{
+        x: offsetX,
+        y: offsetY,
+        createdAt: ts,
+        lineWidth,
+      }];
+
       if (canvasRef.current) {
         canvasRef.current.setPointerCapture(evt.pointerId);
       }
     }
-  }, [challenge, state.solved, state.needsReset, state.expired, onStatusChange]);
+  }, [challenge, solved, needsReset, expired, onStatusChange]);
 
   const handlePointerMove = useCallback((evt: React.PointerEvent<HTMLCanvasElement>) => {
     evt.preventDefault();
-    if (!state.drawing || !challenge) return;
+    if (!drawingRef.current || !challenge) return;
 
     const { x: offsetX, y: offsetY } = getCanvasCoords(evt);
-    const relT = performance.now() - state.startTs;
-    
-    const profile = state.pointerProfile;
+    const relT = performance.now() - startTsRef.current;
+
+    const profile = pointerProfileRef.current;
     const lineWidth = lineWidthForProfile(profile);
-    const deviation = distanceToPath(offsetX, offsetY, state.lookahead);
+    const deviation = distanceToPath(offsetX, offsetY, lookaheadRef.current);
     const tol = profile === "mouse" ? challenge.tolerance.mouse : challenge.tolerance.touch;
 
-    setState(prev => ({
-      ...prev,
-      trajectory: [...prev.trajectory, { x: offsetX, y: offsetY, t: Math.round(relT) }],
-      segments: [...prev.segments, {
-        x: offsetX,
-        y: offsetY,
-        createdAt: performance.now(),
-        lineWidth,
-        deviation,
-        tolerance: tol,
-      }],
-      distanceToEnd: state.finishPoint ? 
-        Math.hypot(offsetX - state.finishPoint[0], offsetY - state.finishPoint[1]) : 
-        null,
-    }));
+    // Push directly to refs — no setState, no re-render
+    trajectoryRef.current.push({ x: offsetX, y: offsetY, t: Math.round(relT) });
+    segmentsRef.current.push({
+      x: offsetX,
+      y: offsetY,
+      createdAt: performance.now(),
+      lineWidth,
+      deviation,
+      tolerance: tol,
+    });
+
+    if (finishPointRef.current) {
+      distanceToEndRef.current = Math.hypot(
+        offsetX - finishPointRef.current[0],
+        offsetY - finishPointRef.current[1]
+      );
+    }
 
     // Real-time visual feedback via status color only
-    if (deviation > tol * 1.5 && state.lookahead.length > 0) {
+    if (deviation > tol * 1.5 && lookaheadRef.current.length > 0) {
       onStatusChange("", "error");
     } else {
       onStatusChange("", "success");
     }
 
-    fetchLookaheadHandler(offsetX, offsetY);
-  }, [state.drawing, state.startTs, state.pointerProfile, state.lookahead, state.finishPoint, state.distanceToEnd, challenge, onStatusChange, fetchLookaheadHandler]);
+    fetchPeek(offsetX, offsetY);
+  }, [challenge, onStatusChange, fetchPeek]);
 
   const handlePointerUp = useCallback((evt: React.PointerEvent<HTMLCanvasElement>) => {
     evt.preventDefault();
-    if (!state.drawing) return;
-    
+    if (!drawingRef.current) return;
+
     if (canvasRef.current) {
       canvasRef.current.releasePointerCapture(evt.pointerId);
     }
-    
-    setState(prev => ({ ...prev, drawing: false }));
+
+    drawingRef.current = false;
     verifyAttemptHandler();
-  }, [state.drawing, verifyAttemptHandler]);
+  }, [verifyAttemptHandler]);
 
   const handlePointerLeave = useCallback((evt: React.PointerEvent<HTMLCanvasElement>) => {
-    if (state.drawing) {
+    if (drawingRef.current) {
       if (canvasRef.current) {
         canvasRef.current.releasePointerCapture(evt.pointerId);
       }
-      setState(prev => ({ 
-        ...prev, 
-        drawing: false, 
-        needsReset: true 
-      }));
-      if (state.timerHandle) clearInterval(state.timerHandle);
+      drawingRef.current = false;
+      setNeedsReset(true);
+      if (timerHandleRef.current) clearInterval(timerHandleRef.current);
       onTimerChange("");
       onStatusChange("Strayed too far.", "error");
     }
-  }, [state.drawing, state.timerHandle, onTimerChange, onStatusChange]);
+  }, [onTimerChange, onStatusChange]);
 
-  // Animation loop
+  // Animation loop — reads refs directly, no React dependency on pointer data
   useEffect(() => {
     let animationId: number;
     const tick = () => {
@@ -540,7 +514,7 @@ export function CaptchaCanvas({
       animationId = requestAnimationFrame(tick);
     };
     animationId = requestAnimationFrame(tick);
-    
+
     return () => {
       cancelAnimationFrame(animationId);
     };
