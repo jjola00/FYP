@@ -84,16 +84,20 @@ async def submit_feedback(
     )
 
     # Send Discord webhook notification
+    discord_sent = False
+    discord_error = None
     if DISCORD_WEBHOOK_URL:
-        await _send_discord_notification(
+        discord_sent, discord_error = await _send_discord_notification(
             feedback_id=feedback_id,
             name=clean_name,
             category=category,
             message=message.strip(),
             image_filenames=saved_filenames,
         )
+    else:
+        discord_error = "DISCORD_WEBHOOK_URL not set"
 
-    return {"ok": True, "feedbackId": feedback_id}
+    return {"ok": True, "feedbackId": feedback_id, "discordSent": discord_sent, "discordError": discord_error}
 
 
 @router.get("/feedback")
@@ -135,7 +139,7 @@ async def _send_discord_notification(
     category: str,
     message: str,
     image_filenames: List[str],
-) -> None:
+) -> tuple[bool, str | None]:
     embed = {
         "title": "New Feedback",
         "color": 0x5865F2,  # Discord blurple
@@ -164,16 +168,18 @@ async def _send_discord_notification(
                         files.append(
                             ("files", (fname, fpath.read_bytes(), "image/png"))
                         )
-                await client.post(
+                resp = await client.post(
                     DISCORD_WEBHOOK_URL,
                     data={"payload_json": json.dumps(payload)},
                     files=files,
                 )
             else:
-                await client.post(
+                resp = await client.post(
                     DISCORD_WEBHOOK_URL,
                     json=payload,
                 )
-    except Exception:
-        # Don't fail the request if Discord notification fails
-        pass
+            if resp.status_code in (200, 204):
+                return True, None
+            return False, f"Discord returned {resp.status_code}: {resp.text[:200]}"
+    except Exception as e:
+        return False, str(e)
