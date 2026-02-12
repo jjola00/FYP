@@ -20,6 +20,7 @@ export function FeedbackWidget() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [device, setDevice] = useState("");
   const [message, setMessage] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [status, setStatus] = useState<Status>("idle");
@@ -28,6 +29,7 @@ export function FeedbackWidget() {
   const resetForm = () => {
     setName("");
     setCategory("");
+    setDevice("");
     setMessage("");
     setImages([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -49,7 +51,7 @@ export function FeedbackWidget() {
   };
 
   const handleSubmit = async () => {
-    if (!category) return;
+    if (!category || !device) return;
     if (!message.trim()) return;
 
     setStatus("sending");
@@ -57,6 +59,7 @@ export function FeedbackWidget() {
     const formData = new FormData();
     formData.append("message", message.trim());
     formData.append("category", category);
+    formData.append("device", device);
     if (name.trim()) formData.append("name", name.trim());
     images.forEach((img) => formData.append("images", img));
 
@@ -161,6 +164,22 @@ export function FeedbackWidget() {
             </div>
 
             <div>
+              <Label className="text-xs text-muted-foreground">
+                Device
+              </Label>
+              <Select value={device} onValueChange={setDevice}>
+                <SelectTrigger className="mt-1 h-8 text-sm">
+                  <SelectValue placeholder="What are you using?" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="phone">Phone</SelectItem>
+                  <SelectItem value="laptop">Laptop</SelectItem>
+                  <SelectItem value="tablet">Tablet / iPad</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label htmlFor="fb-message" className="text-xs text-muted-foreground">
                 Message
               </Label>
@@ -211,7 +230,7 @@ export function FeedbackWidget() {
             <Button
               size="sm"
               onClick={handleSubmit}
-              disabled={!category || !message.trim() || status === "sending"}
+              disabled={!category || !device || !message.trim() || status === "sending"}
               className="w-full"
             >
               {status === "sending"

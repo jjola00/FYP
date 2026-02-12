@@ -24,6 +24,7 @@ def init_db() -> None:
                 id TEXT PRIMARY KEY,
                 name TEXT,
                 category TEXT NOT NULL,
+                device TEXT NOT NULL DEFAULT 'unknown',
                 message TEXT NOT NULL,
                 image_filenames_json TEXT NOT NULL DEFAULT '[]',
                 created_at REAL NOT NULL
@@ -31,6 +32,13 @@ def init_db() -> None:
             """
         )
         conn.commit()
+
+        # Migration: add device column if missing
+        try:
+            conn.execute("ALTER TABLE feedback ADD COLUMN device TEXT NOT NULL DEFAULT 'unknown'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
         # ── Image CAPTCHA challenges ─────────────────────────────
         conn.execute(
@@ -389,19 +397,21 @@ def save_feedback(
     feedback_id: str,
     name: Optional[str],
     category: str,
+    device: str,
     message: str,
     image_filenames: List[str],
 ) -> None:
     with _get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO feedback (id, name, category, message, image_filenames_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO feedback (id, name, category, device, message, image_filenames_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 feedback_id,
                 name,
                 category,
+                device,
                 message,
                 json.dumps(image_filenames),
                 time.time(),

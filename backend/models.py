@@ -120,6 +120,7 @@ class FeedbackItem(BaseModel):
     id: str
     name: Optional[str]
     category: str
+    device: str
     message: str
     imageFilenames: List[str] = Field(default_factory=list)
     createdAt: float

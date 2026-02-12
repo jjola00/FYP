@@ -26,6 +26,7 @@ async def submit_feedback(
     request: Request,
     message: str = Form(...),
     category: str = Form(...),
+    device: str = Form(...),
     name: str = Form(""),
     images: List[UploadFile] = File(default=[]),
 ):
@@ -33,8 +34,11 @@ async def submit_feedback(
     feedback_limiter.check(client_ip)
 
     category = category.strip()
+    device = device.strip()
     if category not in ("line", "image", "both"):
         raise fastapi.HTTPException(status_code=400, detail="Invalid category")
+    if device not in ("phone", "laptop", "tablet"):
+        raise fastapi.HTTPException(status_code=400, detail="Invalid device type")
     if not message.strip():
         raise fastapi.HTTPException(status_code=400, detail="Message is required")
     if len(message) > 2000:
@@ -79,6 +83,7 @@ async def submit_feedback(
         feedback_id=feedback_id,
         name=clean_name,
         category=category,
+        device=device,
         message=message.strip(),
         image_filenames=saved_filenames,
     )
@@ -91,6 +96,7 @@ async def submit_feedback(
             feedback_id=feedback_id,
             name=clean_name,
             category=category,
+            device=device,
             message=message.strip(),
             image_filenames=saved_filenames,
         )
@@ -112,6 +118,7 @@ def list_feedback(secret: str = ""):
                 id=row["id"],
                 name=row["name"],
                 category=row["category"],
+                device=row.get("device", "unknown") if isinstance(row, dict) else (row["device"] if "device" in row.keys() else "unknown"),
                 message=row["message"],
                 imageFilenames=json.loads(row["image_filenames_json"]),
                 createdAt=row["created_at"],
@@ -137,6 +144,7 @@ async def _send_discord_notification(
     feedback_id: str,
     name: str | None,
     category: str,
+    device: str,
     message: str,
     image_filenames: List[str],
 ) -> tuple[bool, str | None]:
@@ -146,6 +154,7 @@ async def _send_discord_notification(
         "fields": [
             {"name": "From", "value": name or "Anonymous", "inline": True},
             {"name": "Category", "value": category.title(), "inline": True},
+            {"name": "Device", "value": device.title(), "inline": True},
             {"name": "Message", "value": message[:1024]},
         ],
         "footer": {"text": f"ID: {feedback_id}"},
