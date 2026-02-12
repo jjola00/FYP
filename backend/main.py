@@ -26,7 +26,9 @@ app.add_middleware(
 )
 
 from .image_routes import router as image_router
+from .feedback_routes import router as feedback_router
 app.include_router(image_router)
+app.include_router(feedback_router)
 
 db.init_db()
 

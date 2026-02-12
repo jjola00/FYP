@@ -15,6 +15,7 @@ interface ImageCaptchaCanvasProps {
   onTimerChange: (time: string) => void;
   onChallengeComplete: (success: boolean) => void;
   onRequestNew: () => void;
+  isAttemptInProgressRef?: React.MutableRefObject<() => boolean>;
 }
 
 interface ClickMarker {
@@ -28,12 +29,16 @@ export function ImageCaptchaCanvas({
   onTimerChange,
   onChallengeComplete,
   onRequestNew,
+  isAttemptInProgressRef,
 }: ImageCaptchaCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [clicks, setClicks] = useState<ClickMarker[]>([]);
   const [expired, setExpired] = useState(false);
   const [solved, setSolved] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // ── Keyboard cursor (5.5) ──────────────────────────────────────
+  const [keyboardCursor, setKeyboardCursor] = useState<{ x: number; y: number } | null>(null);
 
   // ── Timer ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -66,10 +71,19 @@ export function ImageCaptchaCanvas({
       setExpired(false);
       setSolved(false);
       setSubmitted(false);
+      setKeyboardCursor(null);
       onTimerChange("");
       onStatusChange("", "info");
     }
   }, [challenge?.challengeId]);
+
+  // Expose attempt-in-progress check to parent
+  useEffect(() => {
+    if (isAttemptInProgressRef) {
+      isAttemptInProgressRef.current = () =>
+        clicks.length > 0 && !solved && !submitted;
+    }
+  }, [isAttemptInProgressRef, clicks.length, solved, submitted]);
 
   // ── Shared line drawing helper ────────────────────────────────
   const drawLine = useCallback(
@@ -78,7 +92,6 @@ export function ImageCaptchaCanvas({
       ctx.save();
       ctx.strokeStyle = line.colour;
       ctx.lineWidth = line.thickness;
-      ctx.globalAlpha = line.opacity ?? 1.0;
       ctx.beginPath();
       ctx.moveTo(pts[0][0], pts[0][1]);
 
@@ -124,34 +137,7 @@ export function ImageCaptchaCanvas({
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Draw distractor shapes first (behind everything)
-    for (const shape of challenge.shapes ?? []) {
-      ctx.save();
-      ctx.globalAlpha = shape.opacity;
-      ctx.strokeStyle = shape.colour;
-      ctx.lineWidth = shape.strokeWidth;
-
-      if (shape.kind === "circle" && shape.radius != null) {
-        ctx.beginPath();
-        ctx.arc(shape.x, shape.y, shape.radius, 0, 2 * Math.PI);
-        ctx.stroke();
-      } else if (
-        shape.kind === "rectangle" &&
-        shape.width != null &&
-        shape.height != null
-      ) {
-        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-      }
-
-      ctx.restore();
-    }
-
-    // Draw distractor lines (behind challenge lines, muted)
-    for (const d of challenge.distractors ?? []) {
-      drawLine(ctx, d);
-    }
-
-    // Draw challenge lines (full opacity)
+    // Draw challenge lines
     for (const line of challenge.lines) {
       drawLine(ctx, line);
     }
@@ -174,9 +160,32 @@ export function ImageCaptchaCanvas({
 
       ctx.restore();
     }
-  }, [challenge, clicks, drawLine]);
 
-  // Redraw when challenge or clicks change
+    // Draw keyboard cursor crosshair (5.5)
+    if (keyboardCursor) {
+      ctx.save();
+      ctx.strokeStyle = "#FACC15";
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.9;
+      const arm = 12;
+      const gap = 4;
+      // Horizontal arms
+      ctx.beginPath();
+      ctx.moveTo(keyboardCursor.x - arm, keyboardCursor.y);
+      ctx.lineTo(keyboardCursor.x - gap, keyboardCursor.y);
+      ctx.moveTo(keyboardCursor.x + gap, keyboardCursor.y);
+      ctx.lineTo(keyboardCursor.x + arm, keyboardCursor.y);
+      // Vertical arms
+      ctx.moveTo(keyboardCursor.x, keyboardCursor.y - arm);
+      ctx.lineTo(keyboardCursor.x, keyboardCursor.y - gap);
+      ctx.moveTo(keyboardCursor.x, keyboardCursor.y + gap);
+      ctx.lineTo(keyboardCursor.x, keyboardCursor.y + arm);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, [challenge, clicks, drawLine, keyboardCursor]);
+
+  // Redraw when challenge, clicks, or keyboard cursor changes
   useEffect(() => {
     drawFrame();
   }, [drawFrame]);
@@ -196,10 +205,9 @@ export function ImageCaptchaCanvas({
     };
   };
 
-  // ── Click handler ─────────────────────────────────────────────
-  const handlePointerDown = useCallback(
-    (evt: React.PointerEvent<HTMLCanvasElement>) => {
-      evt.preventDefault();
+  // ── Place click at position (shared by pointer and keyboard) ──
+  const placeClick = useCallback(
+    (x: number, y: number) => {
       if (!challenge || expired || solved || submitted) return;
 
       const now = Date.now();
@@ -209,10 +217,19 @@ export function ImageCaptchaCanvas({
         return;
       }
 
-      const { x, y } = getCanvasCoords(evt);
       setClicks((prev) => [...prev, { x, y }]);
     },
     [challenge, expired, solved, submitted, onStatusChange]
+  );
+
+  // ── Click handler ─────────────────────────────────────────────
+  const handlePointerDown = useCallback(
+    (evt: React.PointerEvent<HTMLCanvasElement>) => {
+      evt.preventDefault();
+      const { x, y } = getCanvasCoords(evt);
+      placeClick(x, y);
+    },
+    [placeClick]
   );
 
   // ── Undo last click ──────────────────────────────────────────
@@ -262,8 +279,72 @@ export function ImageCaptchaCanvas({
     }
   }, [challenge, clicks, solved, submitted, onStatusChange, onChallengeComplete]);
 
+  // ── Keyboard navigation (5.5) ────────────────────────────────
+  const handleCanvasFocus = useCallback(() => {
+    if (!keyboardCursor && challenge) {
+      const cx = Math.round(challenge.canvas.width / 2);
+      const cy = Math.round(challenge.canvas.height / 2);
+      setKeyboardCursor({ x: cx, y: cy });
+    }
+  }, [keyboardCursor, challenge]);
+
+  const handleKeyDown = useCallback(
+    (evt: React.KeyboardEvent<HTMLCanvasElement>) => {
+      if (!challenge) return;
+      const w = challenge.canvas.width;
+      const h = challenge.canvas.height;
+      const step = evt.shiftKey ? 1 : 5;
+
+      switch (evt.key) {
+        case "ArrowUp":
+          evt.preventDefault();
+          setKeyboardCursor((prev) => {
+            const cur = prev ?? { x: w / 2, y: h / 2 };
+            return { x: cur.x, y: Math.max(0, cur.y - step) };
+          });
+          break;
+        case "ArrowDown":
+          evt.preventDefault();
+          setKeyboardCursor((prev) => {
+            const cur = prev ?? { x: w / 2, y: h / 2 };
+            return { x: cur.x, y: Math.min(h, cur.y + step) };
+          });
+          break;
+        case "ArrowLeft":
+          evt.preventDefault();
+          setKeyboardCursor((prev) => {
+            const cur = prev ?? { x: w / 2, y: h / 2 };
+            return { x: Math.max(0, cur.x - step), y: cur.y };
+          });
+          break;
+        case "ArrowRight":
+          evt.preventDefault();
+          setKeyboardCursor((prev) => {
+            const cur = prev ?? { x: w / 2, y: h / 2 };
+            return { x: Math.min(w, cur.x + step), y: cur.y };
+          });
+          break;
+        case "Enter":
+        case " ":
+          evt.preventDefault();
+          if (keyboardCursor) {
+            placeClick(keyboardCursor.x, keyboardCursor.y);
+          }
+          break;
+        case "Backspace":
+          evt.preventDefault();
+          handleUndo();
+          break;
+        case "Escape":
+          evt.preventDefault();
+          onRequestNew();
+          break;
+      }
+    },
+    [challenge, keyboardCursor, placeClick, handleUndo, onRequestNew]
+  );
+
   // ── Derived values ────────────────────────────────────────────
-  const expected = challenge?.numIntersections ?? 0;
   const placed = clicks.length;
   const canvasW = challenge?.canvas.width ?? captchaConfig.canvasWidth;
   const canvasH = challenge?.canvas.height ?? captchaConfig.canvasHeight;
@@ -276,35 +357,17 @@ export function ImageCaptchaCanvas({
         ref={canvasRef}
         width={canvasW}
         height={canvasH}
-        className={`rounded-lg border-2 border-accent bg-muted/50 w-full touch-none ${
+        tabIndex={0}
+        className={`rounded-lg border-2 border-accent bg-muted/50 w-full touch-none outline-none focus:ring-2 focus:ring-primary/50 ${
           interactionDisabled ? "opacity-80" : "cursor-crosshair"
         }`}
-        aria-label="Image CAPTCHA - click on line intersection points"
+        aria-label="Image CAPTCHA canvas — click on line intersection points"
         onPointerDown={handlePointerDown}
         onContextMenu={(e) => e.preventDefault()}
+        onFocus={handleCanvasFocus}
+        onKeyDown={handleKeyDown}
         style={{ aspectRatio: "1", maxWidth: "100%", height: "auto" }}
       />
-
-      {/* Click counter dots */}
-      <div
-        className="flex items-center gap-1.5"
-        aria-label={`${placed} of ${expected} clicks placed`}
-      >
-        <span className="text-xs text-muted-foreground mr-1">Clicks:</span>
-        {Array.from({ length: expected }).map((_, i) => (
-          <span
-            key={i}
-            className={`inline-block w-2.5 h-2.5 rounded-full border ${
-              i < placed
-                ? "bg-yellow-400 border-yellow-500"
-                : "bg-transparent border-muted-foreground/40"
-            }`}
-          />
-        ))}
-        {placed > expected && (
-          <span className="text-xs text-orange-400 ml-1">+{placed - expected}</span>
-        )}
-      </div>
 
       {/* Undo / Submit buttons */}
       <div className="flex items-center gap-3">
@@ -324,16 +387,6 @@ export function ImageCaptchaCanvas({
           Submit
         </Button>
       </div>
-
-      {/* Refresh link */}
-      {!solved && (
-        <button
-          className="text-xs text-muted-foreground hover:text-foreground underline"
-          onClick={onRequestNew}
-        >
-          Can&apos;t see it? Request new challenge
-        </button>
-      )}
     </div>
   );
 }

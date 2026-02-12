@@ -1,6 +1,10 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
@@ -156,7 +160,6 @@ IMAGE_LINE_THICKNESS_MIN = 2.0
 IMAGE_LINE_THICKNESS_MAX = 5.0
 
 IMAGE_CLICK_TOLERANCE_PX = int(os.getenv("IMAGE_CLICK_TOLERANCE_PX", "15"))  # how close a click must be to count
-IMAGE_MAX_EXTRA_CLICKS = int(os.getenv("IMAGE_MAX_EXTRA_CLICKS", "1"))  # grace clicks beyond expected count
 
 # Timing — TTL is configurable; TODO: match line CAPTCHA once confirmed
 IMAGE_CHALLENGE_TTL_MS = int(os.getenv("IMAGE_CAPTCHA_TTL_MS", "30000"))
@@ -166,21 +169,6 @@ ENFORCE_IMAGE_MIN_SOLVE = _env_bool("ENFORCE_IMAGE_MIN_SOLVE", True)
 # Geometry computation
 IMAGE_BEZIER_SAMPLE_RESOLUTION = int(os.getenv("IMAGE_BEZIER_SAMPLE_RESOLUTION", "500"))
 IMAGE_INTERSECTION_CLUSTER_RADIUS_PX = float(os.getenv("IMAGE_INTERSECTION_CLUSTER_RADIUS_PX", "3.0"))
-
-# Distractors
-IMAGE_DISTRACTOR_OPACITY_MIN = float(os.getenv("IMAGE_DISTRACTOR_OPACITY_MIN", "0.3"))
-IMAGE_DISTRACTOR_OPACITY_MAX = float(os.getenv("IMAGE_DISTRACTOR_OPACITY_MAX", "0.5"))
-ENFORCE_IMAGE_DISTRACTORS = _env_bool("ENFORCE_IMAGE_DISTRACTORS", True)
-
-# Distractor counts per difficulty: (min, max)
-IMAGE_DISTRACTOR_COUNT = {
-    "easy": (0, 0),
-    "medium": (1, 2),
-    "hard": (2, 3),
-}
-
-# Near-miss distractor gap (min px from nearest challenge line)
-IMAGE_NEAR_MISS_GAP_PX = float(os.getenv("IMAGE_NEAR_MISS_GAP_PX", "8.0"))
 
 # Generation retry budget
 IMAGE_MAX_GENERATION_RETRIES = int(os.getenv("IMAGE_MAX_GENERATION_RETRIES", "50"))

@@ -1,0 +1,161 @@
+import json
+import os
+import uuid
+from pathlib import Path
+from typing import List
+
+import httpx
+import fastapi
+from fastapi import File, Form, UploadFile
+
+from . import db, models
+
+router = fastapi.APIRouter()
+
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+FEEDBACK_SECRET = os.getenv("FEEDBACK_SECRET", "change-me")
+FEEDBACK_IMAGES_DIR = Path("data/feedback_images")
+MAX_IMAGES = 3
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB per image
+
+
+@router.post("/feedback")
+async def submit_feedback(
+    message: str = Form(...),
+    category: str = Form(...),
+    name: str = Form(""),
+    images: List[UploadFile] = File(default=[]),
+):
+    if category not in ("line", "image", "both"):
+        raise fastapi.HTTPException(status_code=400, detail="Invalid category")
+    if not message.strip():
+        raise fastapi.HTTPException(status_code=400, detail="Message is required")
+    if len(message) > 2000:
+        raise fastapi.HTTPException(status_code=400, detail="Message too long (max 2000 chars)")
+    if len(images) > MAX_IMAGES:
+        raise fastapi.HTTPException(status_code=400, detail=f"Max {MAX_IMAGES} images allowed")
+
+    feedback_id = uuid.uuid4().hex
+    saved_filenames: List[str] = []
+
+    # Save uploaded images
+    if images:
+        FEEDBACK_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+        for img in images:
+            if not img.filename:
+                continue
+            content = await img.read()
+            if len(content) > MAX_IMAGE_SIZE_BYTES:
+                raise fastapi.HTTPException(status_code=400, detail="Image too large (max 5 MB)")
+            if not img.content_type or not img.content_type.startswith("image/"):
+                raise fastapi.HTTPException(status_code=400, detail="Only image files are allowed")
+            ext = Path(img.filename).suffix or ".png"
+            filename = f"{feedback_id}_{len(saved_filenames)}{ext}"
+            filepath = FEEDBACK_IMAGES_DIR / filename
+            filepath.write_bytes(content)
+            saved_filenames.append(filename)
+
+    clean_name = name.strip() or None
+
+    db.save_feedback(
+        feedback_id=feedback_id,
+        name=clean_name,
+        category=category,
+        message=message.strip(),
+        image_filenames=saved_filenames,
+    )
+
+    # Send Discord webhook notification
+    if DISCORD_WEBHOOK_URL:
+        await _send_discord_notification(
+            feedback_id=feedback_id,
+            name=clean_name,
+            category=category,
+            message=message.strip(),
+            image_filenames=saved_filenames,
+        )
+
+    return {"ok": True, "feedbackId": feedback_id}
+
+
+@router.get("/feedback")
+def list_feedback(secret: str = ""):
+    if secret != FEEDBACK_SECRET:
+        raise fastapi.HTTPException(status_code=403, detail="Forbidden")
+    rows = db.get_all_feedback()
+    items = []
+    for row in rows:
+        items.append(
+            models.FeedbackItem(
+                id=row["id"],
+                name=row["name"],
+                category=row["category"],
+                message=row["message"],
+                imageFilenames=json.loads(row["image_filenames_json"]),
+                createdAt=row["created_at"],
+            )
+        )
+    return items
+
+
+@router.get("/feedback/images/{filename}")
+def get_feedback_image(filename: str, secret: str = ""):
+    if secret != FEEDBACK_SECRET:
+        raise fastapi.HTTPException(status_code=403, detail="Forbidden")
+    filepath = FEEDBACK_IMAGES_DIR / filename
+    if not filepath.exists() or not filepath.is_file():
+        raise fastapi.HTTPException(status_code=404, detail="Image not found")
+    # Prevent path traversal
+    if filepath.resolve().parent != FEEDBACK_IMAGES_DIR.resolve():
+        raise fastapi.HTTPException(status_code=400, detail="Invalid filename")
+    return fastapi.responses.FileResponse(filepath)
+
+
+async def _send_discord_notification(
+    feedback_id: str,
+    name: str | None,
+    category: str,
+    message: str,
+    image_filenames: List[str],
+) -> None:
+    embed = {
+        "title": "New Feedback",
+        "color": 0x5865F2,  # Discord blurple
+        "fields": [
+            {"name": "From", "value": name or "Anonymous", "inline": True},
+            {"name": "Category", "value": category.title(), "inline": True},
+            {"name": "Message", "value": message[:1024]},
+        ],
+        "footer": {"text": f"ID: {feedback_id}"},
+    }
+    if image_filenames:
+        embed["fields"].append(
+            {"name": "Attachments", "value": f"{len(image_filenames)} image(s)", "inline": True}
+        )
+
+    payload = {"embeds": [embed]}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # If there are images, send them as attachments
+            if image_filenames:
+                files = []
+                for fname in image_filenames:
+                    fpath = FEEDBACK_IMAGES_DIR / fname
+                    if fpath.exists():
+                        files.append(
+                            ("files", (fname, fpath.read_bytes(), "image/png"))
+                        )
+                await client.post(
+                    DISCORD_WEBHOOK_URL,
+                    data={"payload_json": json.dumps(payload)},
+                    files=files,
+                )
+            else:
+                await client.post(
+                    DISCORD_WEBHOOK_URL,
+                    json=payload,
+                )
+    except Exception:
+        # Don't fail the request if Discord notification fails
+        pass

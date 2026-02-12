@@ -27,9 +27,7 @@ def generate() -> models.ImageNewChallengeResponse:
     Returns line definitions and canvas config to the client.
     Intersection coordinates are stored server-side only.
     """
-    difficulty = "medium"  # TODO: escalate based on suspicious behaviour
-
-    challenge = gen.generate_challenge(difficulty=difficulty)
+    challenge = gen.generate_challenge()
     client = challenge["client_data"]
     server = challenge["server_data"]
 
@@ -52,7 +50,6 @@ def generate() -> models.ImageNewChallengeResponse:
         challenge_id=challenge_id,
         intersections=server["intersections"],
         num_intersections=server["numIntersections"],
-        difficulty=difficulty,
         ttl_ms=ttl_ms,
     )
 
@@ -62,12 +59,9 @@ def generate() -> models.ImageNewChallengeResponse:
         ttlMs=ttl_ms,
         expiresAt=expires_at,
         lines=[models.ImageLineDefinition(**l) for l in client["lines"]],
-        distractors=[models.ImageLineDefinition(**d) for d in client.get("distractors", [])],
-        shapes=[models.ImageDistractorShape(**s) for s in client.get("shapes", [])],
         canvas=client["canvas"],
         instruction=client["instruction"],
         numIntersections=client["numIntersections"],
-        difficulty=client["difficulty"],
     )
 
 
@@ -127,6 +121,22 @@ def validate(req: models.ImageVerifyRequest) -> models.ImageVerifyResponse:
         intersections=intersections,
         solve_time_ms=elapsed_ms,
     )
+
+    # ── Log attempt ─────────────────────────────────────────────
+    db.save_image_attempt({
+        "attempt_id": uuid.uuid4().hex,
+        "challenge_id": challenge_id,
+        "num_lines": 0,  # line count not stored in DB schema
+        "num_intersections": row["num_intersections"],
+        "num_clicks": len(req.clicks),
+        "matched": result["matched"],
+        "excess": result["excess"],
+        "passed": result["passed"],
+        "reason": result["reason"],
+        "solve_time_ms": elapsed_ms,
+        "too_fast": result["too_fast"],
+        "clicks": [{"x": c.x, "y": c.y} for c in req.clicks],
+    })
 
     return models.ImageVerifyResponse(
         passed=result["passed"],

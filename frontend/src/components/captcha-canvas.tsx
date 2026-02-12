@@ -15,6 +15,7 @@ interface CaptchaCanvasProps {
   onStatusChange: (status: string, tone?: "info" | "error" | "success") => void;
   onTimerChange: (time: string) => void;
   onChallengeComplete: (success: boolean) => void;
+  isAttemptInProgressRef?: React.MutableRefObject<() => boolean>;
 }
 
 interface CanvasSegment {
@@ -26,11 +27,12 @@ interface CanvasSegment {
   tolerance?: number;
 }
 
-export function CaptchaCanvas({ 
-  challenge, 
-  onStatusChange, 
-  onTimerChange, 
-  onChallengeComplete 
+export function CaptchaCanvas({
+  challenge,
+  onStatusChange,
+  onTimerChange,
+  onChallengeComplete,
+  isAttemptInProgressRef,
 }: CaptchaCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [state, setState] = useState({
@@ -123,6 +125,16 @@ export function CaptchaCanvas({
         .catch(err => console.error("Initial lookahead error:", err));
     }
   }, [challenge?.challengeId]);
+
+  // Expose attempt-in-progress check to parent
+  useEffect(() => {
+    if (isAttemptInProgressRef) {
+      isAttemptInProgressRef.current = () =>
+        (state.drawing || state.trajectory.length > 0) &&
+        !state.solved &&
+        !state.needsReset;
+    }
+  }, [isAttemptInProgressRef, state.drawing, state.trajectory.length, state.solved, state.needsReset]);
 
   const formatFailureReason = (reason?: string) => {
     switch (reason) {
@@ -235,9 +247,9 @@ export function CaptchaCanvas({
     if (!ctx) return;
 
     ctx.save();
-    ctx.strokeStyle = "rgba(99, 102, 241, 0.6)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(129, 140, 248, 0.9)";
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([10, 5]);
     ctx.beginPath();
     ctx.moveTo(state.lookahead[0][0], state.lookahead[0][1]);
     for (let i = 1; i < state.lookahead.length; i++) {
@@ -254,11 +266,15 @@ export function CaptchaCanvas({
     if (!ctx) return;
 
     ctx.save();
-    // Draw start marker
+    // Draw start marker (bright + pulsing-like glow)
     const start = challenge.startPoint;
-    ctx.fillStyle = "rgba(56, 189, 248, 0.8)";
+    ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
     ctx.beginPath();
-    ctx.arc(start[0], start[1], 8, 0, 2 * Math.PI);
+    ctx.arc(start[0], start[1], 16, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = "rgba(56, 189, 248, 1.0)";
+    ctx.beginPath();
+    ctx.arc(start[0], start[1], 10, 0, 2 * Math.PI);
     ctx.fill();
 
     // Draw finish marker if visible

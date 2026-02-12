@@ -80,19 +80,6 @@ class ImageLineDefinition(BaseModel):
     points: List[List[float]]
     colour: str
     thickness: float
-    opacity: Optional[float] = None  # None → 1.0 on client
-
-
-class ImageDistractorShape(BaseModel):
-    kind: Literal["circle", "rectangle"]
-    x: float
-    y: float
-    width: Optional[float] = None
-    height: Optional[float] = None
-    radius: Optional[float] = None
-    colour: str
-    opacity: float
-    strokeWidth: float
 
 
 class ImageNewChallengeResponse(BaseModel):
@@ -101,12 +88,9 @@ class ImageNewChallengeResponse(BaseModel):
     ttlMs: int
     expiresAt: float
     lines: List[ImageLineDefinition]
-    distractors: List[ImageLineDefinition] = []
-    shapes: List[ImageDistractorShape] = []
     canvas: Dict[str, Any]
     instruction: str
     numIntersections: int
-    difficulty: str
 
 
 class ImageClickCoordinate(BaseModel):
@@ -127,3 +111,15 @@ class ImageVerifyResponse(BaseModel):
     expected: int
     excess: int
     tooFast: bool
+
+
+# ─── Feedback models ─────────────────────────────────────────────────
+
+
+class FeedbackItem(BaseModel):
+    id: str
+    name: Optional[str]
+    category: str
+    message: str
+    imageFilenames: List[str] = Field(default_factory=list)
+    createdAt: float

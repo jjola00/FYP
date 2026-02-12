@@ -16,6 +16,21 @@ def _get_conn() -> sqlite3.Connection:
 
 def init_db() -> None:
     with _get_conn() as conn:
+        # ── Feedback ────────────────────────────────────────────────
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS feedback (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                category TEXT NOT NULL,
+                message TEXT NOT NULL,
+                image_filenames_json TEXT NOT NULL DEFAULT '[]',
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
         # ── Image CAPTCHA challenges ─────────────────────────────
         conn.execute(
             """
@@ -23,9 +38,30 @@ def init_db() -> None:
                 id TEXT PRIMARY KEY,
                 intersections_json TEXT NOT NULL,
                 num_intersections INTEGER NOT NULL,
-                difficulty TEXT NOT NULL,
                 ttl_ms INTEGER NOT NULL,
                 used INTEGER DEFAULT 0,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+        # ── Image CAPTCHA attempt logs ────────────────────────────
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS image_attempt_logs (
+                attempt_id TEXT PRIMARY KEY,
+                challenge_id TEXT NOT NULL,
+                num_lines INTEGER NOT NULL,
+                num_intersections INTEGER NOT NULL,
+                num_clicks INTEGER NOT NULL,
+                matched INTEGER NOT NULL,
+                excess INTEGER NOT NULL,
+                passed INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                solve_time_ms REAL NOT NULL,
+                too_fast INTEGER NOT NULL,
+                clicks_json TEXT NOT NULL,
                 created_at REAL NOT NULL
             )
             """
@@ -314,20 +350,18 @@ def save_image_challenge(
     challenge_id: str,
     intersections: List[List[float]],
     num_intersections: int,
-    difficulty: str,
     ttl_ms: int,
 ) -> None:
     with _get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO image_challenges (id, intersections_json, num_intersections, difficulty, ttl_ms, used, created_at)
-            VALUES (?, ?, ?, ?, ?, 0, ?)
+            INSERT INTO image_challenges (id, intersections_json, num_intersections, ttl_ms, used, created_at)
+            VALUES (?, ?, ?, ?, 0, ?)
             """,
             (
                 challenge_id,
                 json.dumps(intersections),
                 num_intersections,
-                difficulty,
                 ttl_ms,
                 time.time(),
             ),
@@ -346,5 +380,69 @@ def mark_image_challenge_used(challenge_id: str) -> None:
     with _get_conn() as conn:
         conn.execute(
             "UPDATE image_challenges SET used = 1 WHERE id = ?", (challenge_id,)
+        )
+        conn.commit()
+
+
+def save_feedback(
+    feedback_id: str,
+    name: Optional[str],
+    category: str,
+    message: str,
+    image_filenames: List[str],
+) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO feedback (id, name, category, message, image_filenames_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                feedback_id,
+                name,
+                category,
+                message,
+                json.dumps(image_filenames),
+                time.time(),
+            ),
+        )
+        conn.commit()
+
+
+def get_all_feedback() -> List[Dict[str, Any]]:
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM feedback ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def save_image_attempt(log: Dict[str, Any]) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO image_attempt_logs (
+                attempt_id, challenge_id,
+                num_lines, num_intersections,
+                num_clicks, matched, excess,
+                passed, reason, solve_time_ms, too_fast,
+                clicks_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                log["attempt_id"],
+                log["challenge_id"],
+                log["num_lines"],
+                log["num_intersections"],
+                log["num_clicks"],
+                log["matched"],
+                log["excess"],
+                1 if log["passed"] else 0,
+                log["reason"],
+                log["solve_time_ms"],
+                1 if log["too_fast"] else 0,
+                json.dumps(log.get("clicks") or []),
+                time.time(),
+            ),
         )
         conn.commit()

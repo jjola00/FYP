@@ -161,19 +161,6 @@ export interface ImageLineDefinition {
   points: number[][];
   colour: string;
   thickness: number;
-  opacity?: number | null;
-}
-
-export interface ImageDistractorShape {
-  kind: "circle" | "rectangle";
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  radius?: number;
-  colour: string;
-  opacity: number;
-  strokeWidth: number;
 }
 
 export interface ImageChallenge {
@@ -182,8 +169,6 @@ export interface ImageChallenge {
   ttlMs: number;
   expiresAt: number;
   lines: ImageLineDefinition[];
-  distractors: ImageLineDefinition[];
-  shapes: ImageDistractorShape[];
   canvas: {
     width: number;
     height: number;
@@ -191,7 +176,6 @@ export interface ImageChallenge {
   };
   instruction: string;
   numIntersections: number;
-  difficulty: string;
 }
 
 export interface ImageVerifyResponse {

@@ -36,7 +36,6 @@ def validate_clicks(
             too_fast (bool): Whether solve time was suspiciously fast.
     """
     tolerance = config.IMAGE_CLICK_TOLERANCE_PX
-    max_extra = config.IMAGE_MAX_EXTRA_CLICKS
     min_time = config.IMAGE_MIN_SOLVE_TIME_MS
 
     expected = len(intersections)
@@ -78,20 +77,57 @@ def validate_clicks(
     click_arr = np.array([[c["x"], c["y"]] for c in clicks])  # (C, 2)
     ix_arr = np.array(intersections)  # (I, 2)
 
-    # ── Match each intersection to the nearest click ─────────────
-    # Distance matrix: (I, C)
+    # ── Check every click is near SOME intersection ──────────────
+    # Distance from each click to its nearest intersection: (C, I)
     dists = np.linalg.norm(
-        ix_arr[:, np.newaxis, :] - click_arr[np.newaxis, :, :],
+        click_arr[:, np.newaxis, :] - ix_arr[np.newaxis, :, :],
         axis=2,
     )
+    min_dist_per_click = dists.min(axis=1)  # (C,)
+    stray_clicks = int(np.sum(min_dist_per_click > tolerance))
 
+    if stray_clicks > 0:
+        # At least one click is not near any intersection
+        # Count how many intersections were matched by the valid clicks
+        matched_intersections = 0
+        used_clicks = set()
+        # Recompute with (I, C) orientation for intersection matching
+        dists_ic = dists.T  # (I, C)
+        for i in range(len(ix_arr)):
+            row = dists_ic[i]
+            order = np.argsort(row)
+            for j in order:
+                if j not in used_clicks and row[j] <= tolerance:
+                    used_clicks.add(j)
+                    matched_intersections += 1
+                    break
+
+        if matched_intersections < expected:
+            missing = expected - matched_intersections
+            return {
+                "passed": False,
+                "reason": f"missed {missing} intersection{'s' if missing != 1 else ''}",
+                "matched": matched_intersections,
+                "expected": expected,
+                "excess": stray_clicks,
+                "too_fast": False,
+            }
+        return {
+            "passed": False,
+            "reason": f"too many extra clicks ({stray_clicks})",
+            "matched": matched_intersections,
+            "expected": expected,
+            "excess": stray_clicks,
+            "too_fast": False,
+        }
+
+    # ── All clicks are near an intersection; check coverage ──────
+    # Greedy matching: for each intersection, find the closest unused click
     matched_intersections = 0
     used_clicks = set()
-
-    # Greedy matching: for each intersection, find the closest unused click
+    dists_ic = dists.T  # (I, C)
     for i in range(len(ix_arr)):
-        row = dists[i]
-        # Sort click indices by distance to this intersection
+        row = dists_ic[i]
         order = np.argsort(row)
         for j in order:
             if j not in used_clicks and row[j] <= tolerance:
@@ -101,24 +137,20 @@ def validate_clicks(
 
     excess = len(clicks) - len(used_clicks)
 
-    # ── Determine pass/fail ──────────────────────────────────────
-    all_matched = matched_intersections == expected
-    within_grace = excess <= max_extra
+    if matched_intersections == expected:
+        return {
+            "passed": True,
+            "reason": "all intersections clicked",
+            "matched": matched_intersections,
+            "expected": expected,
+            "excess": excess,
+            "too_fast": False,
+        }
 
-    if all_matched and within_grace:
-        passed = True
-        reason = "all intersections clicked"
-    elif not all_matched:
-        missing = expected - matched_intersections
-        passed = False
-        reason = f"missed {missing} intersection{'s' if missing != 1 else ''}"
-    else:
-        passed = False
-        reason = f"too many extra clicks ({excess})"
-
+    missing = expected - matched_intersections
     return {
-        "passed": passed,
-        "reason": reason,
+        "passed": False,
+        "reason": f"missed {missing} intersection{'s' if missing != 1 else ''}",
         "matched": matched_intersections,
         "expected": expected,
         "excess": excess,

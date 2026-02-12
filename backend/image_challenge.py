@@ -35,57 +35,30 @@ COLOUR_PALETTE = [
 ]
 
 # ─── Instruction templates ───────────────────────────────────────────────
-# {n} is replaced with the intersection count at generation time.
+# Count is intentionally NOT revealed to the user (security measure).
 
-_INSTRUCTIONS_PLURAL = [
-    "Click on all {n} points where the lines cross",
-    "Tap each intersection point ({n} total)",
-    "Mark all {n} crossing points",
-    "Click where the lines meet ({n} points)",
-    "Select every point where two lines intersect ({n} total)",
-    "Find and click the {n} intersection points",
-    "Identify all {n} spots where lines overlap",
-    "There are {n} crossings — click each one",
-    "Locate and tap all {n} line crossings",
-    "Click each point where one line crosses another ({n} total)",
-]
-
-_INSTRUCTIONS_SINGLE = [
-    "Click on the point where the lines cross",
-    "Tap the intersection point",
-    "Mark the crossing point",
-    "Click where the lines meet",
-    "Select the point where the lines intersect",
-    "Find and click the crossing point",
-    "Identify where the lines overlap",
-    "Locate the spot where the lines cross",
-    "Tap where one line crosses the other",
-    "Click the point where the lines converge",
+_INSTRUCTIONS = [
+    "Click where the lines cross",
+    "Tap each point where lines intersect",
+    "Mark where lines meet",
+    "Click the crossing points of the lines",
+    "Select every point where lines cross",
+    "Find and click where lines meet",
+    "Identify where the coloured lines overlap",
+    "Locate the spots where lines cross",
+    "Tap where one line crosses another",
+    "Click where the lines converge",
 ]
 
 # ─── Background colour variants ─────────────────────────────────────────
 
 _BACKGROUNDS = ["#FFFFFF", "#F5F5F5", "#FAFAFA", "#F0F0F0"]
 
-# ─── Difficulty presets ──────────────────────────────────────────────────
+# ─── Challenge parameters (flat constants, no difficulty tiers) ──────────
 
-DIFFICULTY_PRESETS: Dict[str, Dict[str, Any]] = {
-    "easy": {
-        "num_lines": (2, 2),
-        "target_intersections": (1, 1),
-        "line_types": ["straight"],
-    },
-    "medium": {
-        "num_lines": (2, 3),
-        "target_intersections": (1, 3),
-        "line_types": ["straight", "quadratic"],
-    },
-    "hard": {
-        "num_lines": (3, 4),
-        "target_intersections": (2, 5),
-        "line_types": ["straight", "quadratic", "cubic"],
-    },
-}
+_NUM_LINES = (2, 3)
+_TARGET_INTERSECTIONS = (1, 3)
+_LINE_TYPES = ["straight", "quadratic"]
 
 
 # ─── Bézier evaluation ──────────────────────────────────────────────────
@@ -356,245 +329,10 @@ def _force_intersecting_line(
     return {"type": "straight", "points": [[x1, y1], [x2, y2]]}
 
 
-# ─── Distractor generation ─────────────────────────────────────────────
-
-
-# Muted/desaturated distractor colours (greyish tones)
-_DISTRACTOR_COLOURS = [
-    "#9E9E9E",  # Grey
-    "#78909C",  # Blue-grey
-    "#8D6E63",  # Brown-grey
-    "#90A4AE",  # Light blue-grey
-    "#A1887F",  # Warm grey
-    "#80CBC4",  # Muted teal
-    "#CE93D8",  # Muted lavender
-    "#BCAAA4",  # Taupe
-]
-
-
-def _generate_distractor_line(
-    canvas_w: int,
-    canvas_h: int,
-    margin: int,
-    challenge_lines: List[Dict[str, Any]],
-    num_samples: int,
-    cluster_radius: float,
-) -> Optional[Dict[str, Any]]:
-    """
-    Generate a short non-intersecting distractor line segment.
-
-    Tries up to 20 times to produce a segment that does NOT intersect
-    any of the challenge lines.
-    """
-    for _ in range(20):
-        p1 = _random_point(canvas_w, canvas_h, margin)
-        # Shorter than challenge lines (40-120px)
-        angle = random.uniform(0, 2 * np.pi)
-        length = random.uniform(40, 120)
-        x2 = float(np.clip(p1[0] + length * np.cos(angle), margin, canvas_w - margin))
-        y2 = float(np.clip(p1[1] + length * np.sin(angle), margin, canvas_h - margin))
-        candidate = {"type": "straight", "points": [p1, [x2, y2]]}
-
-        # Check for intersections with every challenge line
-        cand_samples = _sample_line(candidate, num_samples)
-        has_intersection = False
-        for cl in challenge_lines:
-            cl_samples = _sample_line(cl, num_samples)
-            pts = _find_polyline_intersections(cand_samples, cl_samples, cluster_radius)
-            if pts:
-                has_intersection = True
-                break
-
-        if not has_intersection:
-            return candidate
-
-    return None
-
-
-def _generate_near_miss_distractor(
-    canvas_w: int,
-    canvas_h: int,
-    margin: int,
-    challenge_lines: List[Dict[str, Any]],
-    num_samples: int,
-    cluster_radius: float,
-    gap_px: float,
-) -> Optional[Dict[str, Any]]:
-    """
-    Generate a short fragment that approaches a challenge line closely
-    but does not intersect it.
-
-    Strategy: pick a point on a random challenge line, offset it by gap_px,
-    then draw a short segment parallel-ish to the challenge line at that point.
-    """
-    if not challenge_lines:
-        return None
-
-    target = random.choice(challenge_lines)
-    samples = _sample_line(target, num_samples)
-    # Pick a point somewhere in the middle of the line
-    idx = random.randint(num_samples // 4, num_samples * 3 // 4)
-    base_pt = samples[idx]
-
-    # Compute tangent direction at this point
-    if idx < num_samples - 1:
-        tangent = samples[idx + 1] - samples[idx]
-    else:
-        tangent = samples[idx] - samples[idx - 1]
-
-    tangent_len = np.linalg.norm(tangent)
-    if tangent_len < 1e-6:
-        return None
-
-    tangent = tangent / tangent_len
-    normal = np.array([-tangent[1], tangent[0]])
-
-    # Offset by gap_px in the normal direction (randomly left or right)
-    offset_dir = random.choice([-1, 1])
-    offset = normal * offset_dir * gap_px
-
-    # Short fragment (30-60px) roughly parallel to the challenge line
-    frag_len = random.uniform(30, 60)
-    p1 = base_pt + offset - tangent * frag_len / 2
-    p2 = base_pt + offset + tangent * frag_len / 2
-
-    # Clamp to canvas
-    p1[0] = float(np.clip(p1[0], margin, canvas_w - margin))
-    p1[1] = float(np.clip(p1[1], margin, canvas_h - margin))
-    p2[0] = float(np.clip(p2[0], margin, canvas_w - margin))
-    p2[1] = float(np.clip(p2[1], margin, canvas_h - margin))
-
-    candidate = {"type": "straight", "points": [[p1[0], p1[1]], [p2[0], p2[1]]]}
-
-    # Verify no actual intersection
-    cand_samples = _sample_line(candidate, num_samples)
-    for cl in challenge_lines:
-        cl_samples = _sample_line(cl, num_samples)
-        pts = _find_polyline_intersections(cand_samples, cl_samples, cluster_radius)
-        if pts:
-            return None  # Skip this one
-
-    return candidate
-
-
-def _generate_distractor_shape(
-    canvas_w: int,
-    canvas_h: int,
-    margin: int,
-) -> Dict[str, Any]:
-    """Generate a faint geometric shape (circle or rectangle) for background noise."""
-    shape_type = random.choice(["circle", "rectangle"])
-    colour = random.choice(_DISTRACTOR_COLOURS)
-    opacity = random.uniform(
-        config.IMAGE_DISTRACTOR_OPACITY_MIN,
-        config.IMAGE_DISTRACTOR_OPACITY_MAX,
-    )
-
-    if shape_type == "circle":
-        radius = random.uniform(15, 50)
-        cx = random.uniform(margin + radius, canvas_w - margin - radius)
-        cy = random.uniform(margin + radius, canvas_h - margin - radius)
-        return {
-            "kind": "circle",
-            "x": round(cx, 1),
-            "y": round(cy, 1),
-            "radius": round(radius, 1),
-            "colour": colour,
-            "opacity": round(opacity, 2),
-            "strokeWidth": round(random.uniform(1.0, 2.5), 1),
-        }
-    else:
-        w = random.uniform(20, 80)
-        h = random.uniform(20, 80)
-        x = random.uniform(margin, canvas_w - margin - w)
-        y = random.uniform(margin, canvas_h - margin - h)
-        return {
-            "kind": "rectangle",
-            "x": round(x, 1),
-            "y": round(y, 1),
-            "width": round(w, 1),
-            "height": round(h, 1),
-            "colour": colour,
-            "opacity": round(opacity, 2),
-            "strokeWidth": round(random.uniform(1.0, 2.5), 1),
-        }
-
-
-def _generate_distractors(
-    difficulty: str,
-    canvas_w: int,
-    canvas_h: int,
-    margin: int,
-    challenge_lines: List[Dict[str, Any]],
-    num_samples: int,
-    cluster_radius: float,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """
-    Generate visual distractors for the given difficulty level.
-
-    Returns:
-        (line_distractors, shape_distractors)
-    """
-    if not config.ENFORCE_IMAGE_DISTRACTORS:
-        return [], []
-
-    count_range = config.IMAGE_DISTRACTOR_COUNT.get(difficulty, (0, 0))
-    count = random.randint(*count_range)
-
-    if count == 0:
-        return [], []
-
-    gap_px = config.IMAGE_NEAR_MISS_GAP_PX
-    opacity_min = config.IMAGE_DISTRACTOR_OPACITY_MIN
-    opacity_max = config.IMAGE_DISTRACTOR_OPACITY_MAX
-
-    line_distractors: List[Dict[str, Any]] = []
-    shape_distractors: List[Dict[str, Any]] = []
-
-    for _ in range(count):
-        # Randomly choose: regular distractor, near-miss, or shape
-        kind = random.choices(
-            ["line", "near_miss", "shape"],
-            weights=[0.4, 0.35, 0.25],
-            k=1,
-        )[0]
-
-        if kind == "line":
-            d = _generate_distractor_line(
-                canvas_w, canvas_h, margin,
-                challenge_lines, num_samples, cluster_radius,
-            )
-            if d:
-                d["colour"] = random.choice(_DISTRACTOR_COLOURS)
-                d["thickness"] = round(random.uniform(1.0, 3.0), 1)
-                d["opacity"] = round(random.uniform(opacity_min, opacity_max), 2)
-                line_distractors.append(d)
-
-        elif kind == "near_miss":
-            d = _generate_near_miss_distractor(
-                canvas_w, canvas_h, margin,
-                challenge_lines, num_samples, cluster_radius,
-                gap_px,
-            )
-            if d:
-                d["colour"] = random.choice(_DISTRACTOR_COLOURS)
-                d["thickness"] = round(random.uniform(1.0, 3.0), 1)
-                d["opacity"] = round(random.uniform(opacity_min, opacity_max), 2)
-                line_distractors.append(d)
-
-        else:
-            shape_distractors.append(
-                _generate_distractor_shape(canvas_w, canvas_h, margin)
-            )
-
-    return line_distractors, shape_distractors
-
-
 # ─── Main entry point ───────────────────────────────────────────────────
 
 
 def generate_challenge(
-    difficulty: str = "medium",
     canvas_w: Optional[int] = None,
     canvas_h: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -618,10 +356,9 @@ def generate_challenge(
     cluster_r = config.IMAGE_INTERSECTION_CLUSTER_RADIUS_PX
     max_retries = config.IMAGE_MAX_GENERATION_RETRIES
 
-    preset = DIFFICULTY_PRESETS[difficulty]
-    num_lines = random.randint(*preset["num_lines"])
-    target_min, target_max = preset["target_intersections"]
-    available_types: List[str] = preset["line_types"]
+    num_lines = random.randint(*_NUM_LINES)
+    target_min, target_max = _TARGET_INTERSECTIONS
+    available_types: List[str] = _LINE_TYPES
 
     lines: List[Dict[str, Any]] = []
     intersections: List[List[float]] = []
@@ -690,18 +427,8 @@ def generate_challenge(
             lines, samples, cluster_r, canvas_w, canvas_h, ix_margin,
         )
 
-    # ── Generate distractors ─────────────────────────────────────
-    line_distractors, shape_distractors = _generate_distractors(
-        difficulty, canvas_w, canvas_h, margin,
-        lines, samples, cluster_r,
-    )
-
     # ── Build instruction text ───────────────────────────────────
-    n = len(intersections)
-    if n == 1:
-        instruction = random.choice(_INSTRUCTIONS_SINGLE)
-    else:
-        instruction = random.choice(_INSTRUCTIONS_PLURAL).format(n=n)
+    instruction = random.choice(_INSTRUCTIONS)
 
     # ── Assemble client-safe line data ───────────────────────────
     client_lines = [
@@ -714,33 +441,19 @@ def generate_challenge(
         for l in lines
     ]
 
-    client_distractors = [
-        {
-            "type": d["type"],
-            "points": d["points"],
-            "colour": d["colour"],
-            "thickness": d["thickness"],
-            "opacity": d["opacity"],
-        }
-        for d in line_distractors
-    ]
-
     return {
         "client_data": {
             "lines": client_lines,
-            "distractors": client_distractors,
-            "shapes": shape_distractors,
             "canvas": {
                 "width": canvas_w,
                 "height": canvas_h,
                 "background": random.choice(_BACKGROUNDS),
             },
             "instruction": instruction,
-            "numIntersections": n,
-            "difficulty": difficulty,
+            "numIntersections": len(intersections),
         },
         "server_data": {
             "intersections": intersections,
-            "numIntersections": n,
+            "numIntersections": len(intersections),
         },
     }
