@@ -9,8 +9,9 @@ from . import config
 
 def _get_conn() -> sqlite3.Connection:
     config.DATA_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(config.DB_PATH)
+    conn = sqlite3.connect(config.DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 

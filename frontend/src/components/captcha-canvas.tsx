@@ -122,7 +122,7 @@ export function CaptchaCanvas({
             finishPoint: data.finish || null,
           }));
         })
-        .catch(err => console.error("Initial lookahead error:", err));
+        .catch(() => {});
     }
   }, [challenge?.challengeId]);
 
@@ -379,7 +379,6 @@ export function CaptchaCanvas({
         onChallengeComplete(false);
       }
     } catch (err) {
-      console.error("Verification error:", err);
       onStatusChange("Verification error.", "error");
       onChallengeComplete(false);
     }

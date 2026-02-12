@@ -9,9 +9,10 @@ import json
 import time
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from . import captcha_token, config, db
+from .rate_limit import challenge_limiter
 from . import image_challenge as gen
 from . import image_validator as val
 from . import models
@@ -20,13 +21,15 @@ router = APIRouter(prefix="/captcha/image", tags=["image-captcha"])
 
 
 @router.post("/generate", response_model=models.ImageNewChallengeResponse)
-def generate() -> models.ImageNewChallengeResponse:
+def generate(request: Request) -> models.ImageNewChallengeResponse:
     """
     Generate a new image CAPTCHA challenge.
 
     Returns line definitions and canvas config to the client.
     Intersection coordinates are stored server-side only.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    challenge_limiter.check(client_ip)
     challenge = gen.generate_challenge()
     client = challenge["client_data"]
     server = challenge["server_data"]

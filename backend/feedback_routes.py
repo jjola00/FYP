@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import uuid
@@ -6,9 +7,10 @@ from typing import List
 
 import httpx
 import fastapi
-from fastapi import File, Form, UploadFile
+from fastapi import File, Form, Request, UploadFile
 
 from . import db, models
+from .rate_limit import feedback_limiter
 
 router = fastapi.APIRouter()
 
@@ -16,16 +18,21 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 FEEDBACK_SECRET = os.getenv("FEEDBACK_SECRET", "change-me")
 FEEDBACK_IMAGES_DIR = Path("data/feedback_images")
 MAX_IMAGES = 3
-MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB per image
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB per image
 
 
 @router.post("/feedback")
 async def submit_feedback(
+    request: Request,
     message: str = Form(...),
     category: str = Form(...),
     name: str = Form(""),
     images: List[UploadFile] = File(default=[]),
 ):
+    client_ip = request.client.host if request.client else "unknown"
+    feedback_limiter.check(client_ip)
+
+    category = category.strip()
     if category not in ("line", "image", "both"):
         raise fastapi.HTTPException(status_code=400, detail="Invalid category")
     if not message.strip():
@@ -44,9 +51,20 @@ async def submit_feedback(
         for img in images:
             if not img.filename:
                 continue
-            content = await img.read()
-            if len(content) > MAX_IMAGE_SIZE_BYTES:
-                raise fastapi.HTTPException(status_code=400, detail="Image too large (max 5 MB)")
+            # Read in chunks to reject oversized uploads early
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = await img.read(1024 * 64)  # 64KB chunks
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_IMAGE_SIZE_BYTES:
+                    raise fastapi.HTTPException(status_code=400, detail="Image too large (max 10 MB)")
+                chunks.append(chunk)
+            content = b"".join(chunks)
+            if not content:
+                continue
             if not img.content_type or not img.content_type.startswith("image/"):
                 raise fastapi.HTTPException(status_code=400, detail="Only image files are allowed")
             ext = Path(img.filename).suffix or ".png"
@@ -80,7 +98,7 @@ async def submit_feedback(
 
 @router.get("/feedback")
 def list_feedback(secret: str = ""):
-    if secret != FEEDBACK_SECRET:
+    if not hmac.compare_digest(secret, FEEDBACK_SECRET):
         raise fastapi.HTTPException(status_code=403, detail="Forbidden")
     rows = db.get_all_feedback()
     items = []
@@ -100,7 +118,7 @@ def list_feedback(secret: str = ""):
 
 @router.get("/feedback/images/{filename}")
 def get_feedback_image(filename: str, secret: str = ""):
-    if secret != FEEDBACK_SECRET:
+    if not hmac.compare_digest(secret, FEEDBACK_SECRET):
         raise fastapi.HTTPException(status_code=403, detail="Forbidden")
     filepath = FEEDBACK_IMAGES_DIR / filename
     if not filepath.exists() or not filepath.is_file():

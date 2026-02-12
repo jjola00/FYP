@@ -273,7 +273,6 @@ export function ImageCaptchaCanvas({
         onChallengeComplete(false);
       }
     } catch (err) {
-      console.error("Image verification error:", err);
       onStatusChange("Verification error.", "error");
       onChallengeComplete(false);
     }

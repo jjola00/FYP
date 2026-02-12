@@ -10,6 +10,7 @@ import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db, models, path, captcha_token
+from .rate_limit import challenge_limiter
 
 app = fastapi.FastAPI(title="Ephemeral Line CAPTCHA")
 
@@ -91,7 +92,9 @@ def _percentile(values: List[float], pct: float) -> float:
 
 
 @app.post("/captcha/line/new", response_model=models.NewChallengeResponse)
-def new_challenge() -> models.NewChallengeResponse:
+def new_challenge(request: fastapi.Request) -> models.NewChallengeResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    challenge_limiter.check(client_ip)
     challenge_id = uuid.uuid4().hex
     seed = uuid.uuid4().hex
     points, length = path.generate_path(seed)

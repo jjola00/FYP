@@ -97,7 +97,6 @@ export default function CaptchaPage() {
       setStatusText("");
       setStatusTone("info");
     } catch (error) {
-      console.error("Failed to fetch challenge:", error);
       setStatusText("Failed to load");
       setStatusTone("error");
     } finally {
