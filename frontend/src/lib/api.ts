@@ -134,7 +134,8 @@ export async function verifyAttempt(
 export async function fetchLookahead(
   challenge: Challenge,
   x: number,
-  y: number
+  y: number,
+  pointerType: string = "mouse"
 ): Promise<LookaheadResponse> {
   const res = await fetchWithTimeout(`${API_BASE}/captcha/line/peek`, {
     method: "POST",
@@ -144,6 +145,7 @@ export async function fetchLookahead(
       nonce: challenge.nonce,
       token: challenge.token,
       cursor: [x, y],
+      pointerType,
     }),
   });
 
@@ -200,7 +202,8 @@ export async function fetchImageChallenge(): Promise<ImageChallenge> {
 
 export async function verifyImageAttempt(
   challenge: ImageChallenge,
-  clicks: Array<{ x: number; y: number }>
+  clicks: Array<{ x: number; y: number }>,
+  pointerType: string = "mouse"
 ): Promise<ImageVerifyResponse> {
   const res = await fetchWithTimeout(`${API_BASE}/captcha/image/validate`, {
     method: "POST",
@@ -209,6 +212,7 @@ export async function verifyImageAttempt(
       challengeId: challenge.challengeId,
       token: challenge.token,
       clicks,
+      pointerType,
     }),
   });
 

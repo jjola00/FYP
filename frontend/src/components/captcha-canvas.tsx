@@ -44,7 +44,7 @@ export function CaptchaCanvas({
   const startTsRef = useRef(0);
   const pointerProfileRef = useRef<"mouse" | "touch">("mouse");
   const lastPeekAtRef = useRef(0);
-  const peekMinIntervalRef = useRef(80);
+  const peekMinIntervalRef = useRef(60);
   const peekBlockedUntilRef = useRef(0);
   const finishPointRef = useRef<[number, number] | null>(null);
   const showFinishRef = useRef(false);
@@ -97,7 +97,7 @@ export function CaptchaCanvas({
       drawingRef.current = false;
       startTsRef.current = 0;
       lastPeekAtRef.current = 0;
-      peekMinIntervalRef.current = 80;
+      peekMinIntervalRef.current = 60;
       peekBlockedUntilRef.current = 0;
       finishPointRef.current = null;
       showFinishRef.current = false;
@@ -317,13 +317,13 @@ export function CaptchaCanvas({
     if (!challenge) return;
 
     peekInFlightRef.current = true;
-    fetchLookahead(challenge, x, y)
+    fetchLookahead(challenge, x, y, pointerProfileRef.current)
       .then(data => {
         lookaheadRef.current = data.ahead;
         distanceToEndRef.current = data.distanceToEnd;
         showFinishRef.current = Boolean(data.finish);
         finishPointRef.current = data.finish || null;
-        peekMinIntervalRef.current = Math.max(80, peekMinIntervalRef.current - 5);
+        peekMinIntervalRef.current = Math.max(60, peekMinIntervalRef.current - 5);
       })
       .catch((err: any) => {
         if (err?.message?.includes("429")) {

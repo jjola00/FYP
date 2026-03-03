@@ -227,14 +227,21 @@ def peek_path(payload: models.PeekRequest):
     # Calculate cursor advancement since last peek
     cursor_advance = max(0.0, pos - last_pos) if last_peek_at is not None else config.PEEK_DECAY_MIN_ADVANCE_PX
 
+    # Select base lookahead distance based on pointer type
+    peek_pointer = payload.pointerType or "mouse"
+    if peek_pointer in ("touch", "pen"):
+        base_ahead_px = config.PEEK_AHEAD_TOUCH_PX
+    else:
+        base_ahead_px = config.PEEK_AHEAD_PX
+
     # Progressive decay: reduce lookahead if cursor hasn't advanced much
     if config.ENFORCE_PEEK_DECAY and cursor_advance < config.PEEK_DECAY_MIN_ADVANCE_PX:
         # Scale lookahead based on how much cursor advanced
         advance_ratio = cursor_advance / config.PEEK_DECAY_MIN_ADVANCE_PX
         decay_multiplier = config.PEEK_DECAY_FACTOR + (1 - config.PEEK_DECAY_FACTOR) * advance_ratio
-        effective_ahead = max(config.PEEK_DECAY_MIN_PX, config.PEEK_AHEAD_PX * decay_multiplier)
+        effective_ahead = max(config.PEEK_DECAY_MIN_PX, base_ahead_px * decay_multiplier)
     else:
-        effective_ahead = config.PEEK_AHEAD_PX
+        effective_ahead = base_ahead_px
 
     db.update_peek_progress(payload.challengeId, new_pos, now, peek_count + 1)
 

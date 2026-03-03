@@ -32,6 +32,7 @@ export function ImageCaptchaCanvas({
   isAttemptInProgressRef,
 }: ImageCaptchaCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pointerTypeRef = useRef<"mouse" | "touch">("mouse");
   const [clicks, setClicks] = useState<ClickMarker[]>([]);
   const [expired, setExpired] = useState(false);
   const [solved, setSolved] = useState(false);
@@ -226,6 +227,7 @@ export function ImageCaptchaCanvas({
   const handlePointerDown = useCallback(
     (evt: React.PointerEvent<HTMLCanvasElement>) => {
       evt.preventDefault();
+      pointerTypeRef.current = evt.pointerType === "mouse" ? "mouse" : "touch";
       const { x, y } = getCanvasCoords(evt);
       placeClick(x, y);
     },
@@ -246,7 +248,7 @@ export function ImageCaptchaCanvas({
     onStatusChange("Verifying...");
 
     try {
-      const result = await verifyImageAttempt(challenge, clicks);
+      const result = await verifyImageAttempt(challenge, clicks, pointerTypeRef.current);
 
       if (result.passed) {
         setSolved(true);

@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { CaptchaCanvas } from "@/components/captcha-canvas";
 import { ImageCaptchaCanvas } from "@/components/image-captcha-canvas";
 import { FeedbackWidget } from "@/components/feedback-widget";
+import { TutorialOverlay } from "@/components/tutorial-overlay";
 import {
   Challenge,
   ImageChallenge,
@@ -220,6 +221,7 @@ export default function CaptchaPage() {
           </p>
         </CardHeader>
         <CardContent>
+          <TutorialOverlay type={activeTab} />
           <Tabs
             value={activeTab}
             className="w-full"

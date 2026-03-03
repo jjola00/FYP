@@ -119,13 +119,21 @@ def validate(req: models.ImageVerifyRequest) -> models.ImageVerifyResponse:
     intersections = json.loads(row["intersections_json"])
     clicks = [{"x": c.x, "y": c.y} for c in req.clicks]
 
+    pointer_type = req.pointerType or "mouse"
     result = val.validate_clicks(
         clicks=clicks,
         intersections=intersections,
         solve_time_ms=elapsed_ms,
+        pointer_type=pointer_type,
     )
 
     # ── Log attempt ─────────────────────────────────────────────
+    from . import config as _cfg
+    tolerance_used = (
+        _cfg.IMAGE_CLICK_TOLERANCE_TOUCH_PX
+        if pointer_type in ("touch", "pen")
+        else _cfg.IMAGE_CLICK_TOLERANCE_MOUSE_PX
+    )
     db.save_image_attempt({
         "attempt_id": uuid.uuid4().hex,
         "challenge_id": challenge_id,
@@ -139,6 +147,8 @@ def validate(req: models.ImageVerifyRequest) -> models.ImageVerifyResponse:
         "solve_time_ms": elapsed_ms,
         "too_fast": result["too_fast"],
         "clicks": [{"x": c.x, "y": c.y} for c in req.clicks],
+        "pointer_type": pointer_type,
+        "tolerance_px": tolerance_used,
     })
 
     return models.ImageVerifyResponse(

@@ -29,6 +29,7 @@ class PeekRequest(BaseModel):
     nonce: str
     token: str
     cursor: List[float]
+    pointerType: Optional[Literal["mouse", "touch", "pen"]] = "mouse"
 
 
 class PeekResponse(BaseModel):
@@ -102,6 +103,7 @@ class ImageVerifyRequest(BaseModel):
     challengeId: str
     token: str
     clicks: List[ImageClickCoordinate]
+    pointerType: Optional[Literal["mouse", "touch", "pen"]] = "mouse"
 
 
 class ImageVerifyResponse(BaseModel):

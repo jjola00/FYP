@@ -77,6 +77,17 @@ def init_db() -> None:
         )
         conn.commit()
 
+        # Migration: add pointer_type and tolerance_px columns to image_attempt_logs
+        for col_def in [
+            "ALTER TABLE image_attempt_logs ADD COLUMN pointer_type TEXT",
+            "ALTER TABLE image_attempt_logs ADD COLUMN tolerance_px REAL",
+        ]:
+            try:
+                conn.execute(col_def)
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
+
         # ── Line CAPTCHA challenges ──────────────────────────────
         conn.execute(
             """
@@ -437,8 +448,9 @@ def save_image_attempt(log: Dict[str, Any]) -> None:
                 num_lines, num_intersections,
                 num_clicks, matched, excess,
                 passed, reason, solve_time_ms, too_fast,
-                clicks_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                clicks_json, pointer_type, tolerance_px,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 log["attempt_id"],
@@ -453,6 +465,8 @@ def save_image_attempt(log: Dict[str, Any]) -> None:
                 log["solve_time_ms"],
                 1 if log["too_fast"] else 0,
                 json.dumps(log.get("clicks") or []),
+                log.get("pointer_type"),
+                log.get("tolerance_px"),
                 time.time(),
             ),
         )

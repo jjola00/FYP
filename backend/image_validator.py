@@ -16,6 +16,7 @@ def validate_clicks(
     clicks: List[Dict[str, float]],
     intersections: List[List[float]],
     solve_time_ms: float,
+    pointer_type: str = "mouse",
 ) -> Dict[str, Any]:
     """
     Validate a set of user clicks against the known intersection points.
@@ -25,6 +26,7 @@ def validate_clicks(
         intersections: List of [x, y] ground-truth intersection coordinates
                        (from server_data, never exposed to client).
         solve_time_ms: Time in milliseconds from challenge issue to submission.
+        pointer_type: "mouse", "touch", or "pen". Touch/pen get wider tolerance.
 
     Returns:
         Dict with keys:
@@ -35,7 +37,10 @@ def validate_clicks(
             excess (int): Clicks that didn't match any intersection.
             too_fast (bool): Whether solve time was suspiciously fast.
     """
-    tolerance = config.IMAGE_CLICK_TOLERANCE_PX
+    if pointer_type in ("touch", "pen"):
+        tolerance = config.IMAGE_CLICK_TOLERANCE_TOUCH_PX
+    else:
+        tolerance = config.IMAGE_CLICK_TOLERANCE_MOUSE_PX
     min_time = config.IMAGE_MIN_SOLVE_TIME_MS
 
     expected = len(intersections)
