@@ -16,7 +16,7 @@ export const captchaConfig = {
 };
 
 // Generate or retrieve a persistent session ID for this browser session
-function getSessionId(): string {
+export function getSessionId(): string {
   if (typeof window === "undefined") return "server-render";
 
   let sessionId = sessionStorage.getItem("captcha_session_id");
@@ -219,6 +219,34 @@ export async function verifyImageAttempt(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Image verification failed: HTTP ${res.status}${text ? ` - ${text}` : ""}`);
+  }
+
+  return await res.json();
+}
+
+// ─── Questionnaire ──────────────────────────────────────────────────────
+
+export interface QuestionnaireData {
+  sessionId: string;
+  ageRange: string;
+  captchaFrequency: number;
+  captcha1Difficulty: number;
+  captcha1Frustration: number;
+  captcha2Difficulty: number;
+  captcha2Frustration: number;
+  comments?: string;
+}
+
+export async function submitQuestionnaire(data: QuestionnaireData): Promise<{ status: string; id: string }> {
+  const res = await fetchWithTimeout(`${API_BASE}/questionnaire`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Questionnaire submission failed: HTTP ${res.status}${text ? ` - ${text}` : ""}`);
   }
 
   return await res.json();

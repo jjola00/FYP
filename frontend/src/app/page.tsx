@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,6 +28,8 @@ const LINE_INSTRUCTION =
 const FALLBACK_AFTER_FAILURES = 3;
 
 export default function CaptchaPage() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
   const [activeTab, setActiveTab] = useState<"line" | "visual">("line");
   const [instruction, setInstruction] = useState(LINE_INSTRUCTION);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -40,6 +43,10 @@ export default function CaptchaPage() {
   const [verified, setVerified] = useState(false);
   const [verifiedType, setVerifiedType] = useState<"line" | "visual" | null>(null);
 
+  // ── Study flow: track which CAPTCHAs are complete ─────────────
+  const [lineComplete, setLineComplete] = useState(false);
+  const [imageComplete, setImageComplete] = useState(false);
+
   // ── Failure tracking (5.4) ────────────────────────────────────
   const [lineFailures, setLineFailures] = useState(0);
   const [imageFailures, setImageFailures] = useState(0);
@@ -48,6 +55,29 @@ export default function CaptchaPage() {
   const [pendingTab, setPendingTab] = useState<"line" | "visual" | null>(null);
   const lineAttemptRef = useRef<() => boolean>(() => false);
   const imageAttemptRef = useRef<() => boolean>(() => false);
+
+  // ── Consent gate ──────────────────────────────────────────────
+  useEffect(() => {
+    const consented = sessionStorage.getItem("study_consented") === "true";
+    if (!consented) {
+      router.replace("/info-sheet");
+      return;
+    }
+    // Restore completion state from sessionStorage
+    const lineDone = sessionStorage.getItem("captcha_line_complete") === "true";
+    const imageDone = sessionStorage.getItem("captcha_image_complete") === "true";
+    if (lineDone && imageDone) {
+      // Both done — go to questionnaire
+      router.replace("/questionnaire");
+      return;
+    }
+    setLineComplete(lineDone);
+    setImageComplete(imageDone);
+    // Start on the type that hasn't been completed yet
+    const startTab = lineDone ? "visual" : "line";
+    setActiveTab(startTab);
+    setReady(true);
+  }, [router]);
 
   const handleStatusChange = (newStatus: string, tone?: "info" | "error" | "success") => {
     setStatusText(newStatus);
@@ -62,6 +92,14 @@ export default function CaptchaPage() {
     if (success) {
       setVerified(true);
       setVerifiedType(activeTab);
+      // Mark this CAPTCHA type as complete in sessionStorage
+      if (activeTab === "line") {
+        sessionStorage.setItem("captcha_line_complete", "true");
+        setLineComplete(true);
+      } else {
+        sessionStorage.setItem("captcha_image_complete", "true");
+        setImageComplete(true);
+      }
       // Notify consuming applications
       window.dispatchEvent(
         new CustomEvent("captcha-verified", { detail: { type: activeTab } })
@@ -97,7 +135,7 @@ export default function CaptchaPage() {
       }
       setStatusText("");
       setStatusTone("info");
-    } catch (error) {
+    } catch {
       setStatusText("Failed to load");
       setStatusTone("error");
     } finally {
@@ -136,16 +174,29 @@ export default function CaptchaPage() {
     }
   };
 
-  const handleResetVerified = () => {
-    setVerified(false);
-    setVerifiedType(null);
-    loadChallenge(activeTab);
+  const handleContinueAfterVerify = () => {
+    // Check if both CAPTCHAs are now complete
+    const lineDone = sessionStorage.getItem("captcha_line_complete") === "true";
+    const imageDone = sessionStorage.getItem("captcha_image_complete") === "true";
+
+    if (lineDone && imageDone) {
+      router.push("/questionnaire");
+    } else {
+      // Switch to the other CAPTCHA type
+      const nextTab = lineDone ? "visual" : "line";
+      setVerified(false);
+      setVerifiedType(null);
+      switchToTab(nextTab);
+    }
   };
 
-  // Load initial challenge
+  // Load initial challenge once ready
   useEffect(() => {
-    loadChallenge("line");
-  }, []);
+    if (ready) {
+      loadChallenge(activeTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // Derive nudge messages
   const showLineNudge = lineFailures >= FALLBACK_AFTER_FAILURES;
@@ -157,8 +208,19 @@ export default function CaptchaPage() {
   const nudgeLabel =
     nudgeTarget === "line" ? "Trace the Path" : "Spot the Crossings";
 
+  // Don't render until consent check is done
+  if (!ready) return null;
+
+  // Determine study progress
+  const bothComplete = lineComplete && imageComplete;
+
   // ── Verified banner ─────────────────────────────────────────
   if (verified) {
+    const otherDone =
+      verifiedType === "line" ? imageComplete : lineComplete;
+    const nextLabel =
+      verifiedType === "line" ? "Spot the Crossings" : "Trace the Path";
+
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center p-2 sm:p-4">
         <Card className="w-full max-w-sm sm:max-w-md shadow-2xl shadow-primary/10">
@@ -195,8 +257,21 @@ export default function CaptchaPage() {
                 {verifiedType === "line" ? "Trace the Path" : "Spot the Crossings"}{" "}
                 challenge.
               </p>
-              <Button variant="ghost" size="sm" onClick={handleResetVerified}>
-                Reset
+
+              {/* Progress indicators */}
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span className={lineComplete ? "text-green-500 font-medium" : ""}>
+                  {lineComplete ? "\u2713" : "\u25CB"} Trace the Path
+                </span>
+                <span className={imageComplete ? "text-green-500 font-medium" : ""}>
+                  {imageComplete ? "\u2713" : "\u25CB"} Spot the Crossings
+                </span>
+              </div>
+
+              <Button onClick={handleContinueAfterVerify}>
+                {otherDone || bothComplete
+                  ? "Continue to Questionnaire"
+                  : `Next: ${nextLabel}`}
               </Button>
             </div>
           </CardContent>
@@ -217,8 +292,18 @@ export default function CaptchaPage() {
             Beyond Recognition
           </CardTitle>
           <p className="text-center text-sm text-muted-foreground">
-            Verify you&apos;re human — choose a challenge type
+            Verify you&apos;re human — complete both challenges
           </p>
+
+          {/* Progress indicators */}
+          <div className="flex justify-center gap-4 text-xs text-muted-foreground pt-1">
+            <span className={lineComplete ? "text-green-500 font-medium" : ""}>
+              {lineComplete ? "\u2713" : "\u25CB"} Trace the Path
+            </span>
+            <span className={imageComplete ? "text-green-500 font-medium" : ""}>
+              {imageComplete ? "\u2713" : "\u25CB"} Spot the Crossings
+            </span>
+          </div>
         </CardHeader>
         <CardContent>
           <TutorialOverlay type={activeTab} />
@@ -228,8 +313,12 @@ export default function CaptchaPage() {
             onValueChange={handleTabChange}
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="line">Trace the Path</TabsTrigger>
-              <TabsTrigger value="visual">Spot the Crossings</TabsTrigger>
+              <TabsTrigger value="line" disabled={lineComplete}>
+                {lineComplete ? "\u2713 " : ""}Trace the Path
+              </TabsTrigger>
+              <TabsTrigger value="visual" disabled={imageComplete}>
+                {imageComplete ? "\u2713 " : ""}Spot the Crossings
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 

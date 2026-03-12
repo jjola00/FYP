@@ -88,6 +88,25 @@ def init_db() -> None:
             except sqlite3.OperationalError:
                 pass
 
+        # ── Questionnaire responses ─────────────────────────────
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS questionnaire_responses (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                age_range TEXT NOT NULL,
+                captcha_frequency INTEGER NOT NULL,
+                captcha1_difficulty INTEGER NOT NULL,
+                captcha1_frustration INTEGER NOT NULL,
+                captcha2_difficulty INTEGER NOT NULL,
+                captcha2_frustration INTEGER NOT NULL,
+                comments TEXT,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
         # ── Line CAPTCHA challenges ──────────────────────────────
         conn.execute(
             """
@@ -437,6 +456,33 @@ def get_all_feedback() -> List[Dict[str, Any]]:
             "SELECT * FROM feedback ORDER BY created_at DESC"
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+def save_questionnaire_response(data: Dict[str, Any]) -> None:
+    with _get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO questionnaire_responses (
+                id, session_id, age_range, captcha_frequency,
+                captcha1_difficulty, captcha1_frustration,
+                captcha2_difficulty, captcha2_frustration,
+                comments, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data["id"],
+                data["session_id"],
+                data["age_range"],
+                data["captcha_frequency"],
+                data["captcha1_difficulty"],
+                data["captcha1_frustration"],
+                data["captcha2_difficulty"],
+                data["captcha2_frustration"],
+                data.get("comments"),
+                time.time(),
+            ),
+        )
+        conn.commit()
 
 
 def save_image_attempt(log: Dict[str, Any]) -> None:

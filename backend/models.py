@@ -126,3 +126,17 @@ class FeedbackItem(BaseModel):
     message: str
     imageFilenames: List[str] = Field(default_factory=list)
     createdAt: float
+
+
+# ─── Questionnaire models ─────────────────────────────────────────────
+
+
+class QuestionnaireRequest(BaseModel):
+    sessionId: str
+    ageRange: str
+    captchaFrequency: int = Field(..., ge=1, le=5)
+    captcha1Difficulty: int = Field(..., ge=1, le=5)
+    captcha1Frustration: int = Field(..., ge=1, le=5)
+    captcha2Difficulty: int = Field(..., ge=1, le=5)
+    captcha2Frustration: int = Field(..., ge=1, le=5)
+    comments: Optional[str] = None

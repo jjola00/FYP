@@ -777,6 +777,25 @@ def verify_attempt(payload: models.VerifyRequest):
     )
 
 
+@app.post("/questionnaire")
+def submit_questionnaire(payload: models.QuestionnaireRequest):
+    response_id = uuid.uuid4().hex
+    db.save_questionnaire_response(
+        {
+            "id": response_id,
+            "session_id": payload.sessionId,
+            "age_range": payload.ageRange,
+            "captcha_frequency": payload.captchaFrequency,
+            "captcha1_difficulty": payload.captcha1Difficulty,
+            "captcha1_frustration": payload.captcha1Frustration,
+            "captcha2_difficulty": payload.captcha2Difficulty,
+            "captcha2_frustration": payload.captcha2Frustration,
+            "comments": payload.comments,
+        }
+    )
+    return {"status": "ok", "id": response_id}
+
+
 @app.get("/health")
 def healthcheck():
     return {"status": "ok", "time": time.time()}
