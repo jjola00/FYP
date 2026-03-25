@@ -1,0 +1,10 @@
+[
+  {
+    "strategy": "constant",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "error: Page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000/\nCall log:\n  - navigating to \"http://localhost:3000/\", waiting until \"networkidle\"\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  }
+]

@@ -21,11 +21,30 @@ import {
   fetchChallenge,
   fetchImageChallenge,
 } from "@/lib/api";
+import { useConfetti } from "@/hooks/use-confetti";
+import { FailureTutorial } from "@/components/failure-tutorial";
 
 const LINE_INSTRUCTION =
   "HOLD the blue dot and trace the line without lifting. The path appears as you go.";
 
 const FALLBACK_AFTER_FAILURES = 3;
+const REQUIRED_PASSES = 3;
+const AUTO_ADVANCE_DELAY_MS = 1800;
+
+function PassDots({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {Array.from({ length: total }, (_, i) => (
+        <div
+          key={i}
+          className={`h-2.5 w-2.5 rounded-full transition-all duration-500 ${
+            i < current ? "bg-green-500 scale-110" : "bg-muted-foreground/25"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function CaptchaPage() {
   const router = useRouter();
@@ -39,13 +58,23 @@ export default function CaptchaPage() {
   const [timer, setTimer] = useState("Time: --");
   const [isLoading, setIsLoading] = useState(false);
 
-  // ── Verified state (5.3) ──────────────────────────────────────
-  const [verified, setVerified] = useState(false);
-  const [verifiedType, setVerifiedType] = useState<"line" | "visual" | null>(null);
+  // ── Confetti ────────────────────────────────────────────────────
+  const { fireConfetti } = useConfetti();
 
-  // ── Study flow: track which CAPTCHAs are complete ─────────────
-  const [lineComplete, setLineComplete] = useState(false);
-  const [imageComplete, setImageComplete] = useState(false);
+  // ── Failure tutorial popup ──────────────────────────────────────
+  const [failureTutorialOpen, setFailureTutorialOpen] = useState(false);
+  const [failureReason, setFailureReason] = useState("");
+  const [failureCaptchaType, setFailureCaptchaType] = useState<"line" | "visual">("line");
+
+  // ── Type-complete interstitial (shown when a type hits 3/3) ─────
+  const [typeJustCompleted, setTypeJustCompleted] = useState<"line" | "visual" | null>(null);
+
+  // ── Study flow: track pass counts per CAPTCHA type ──────────────
+  const [linePasses, setLinePasses] = useState(0);
+  const [imagePasses, setImagePasses] = useState(0);
+
+  const lineComplete = linePasses >= REQUIRED_PASSES;
+  const imageComplete = imagePasses >= REQUIRED_PASSES;
 
   // ── Failure tracking (5.4) ────────────────────────────────────
   const [lineFailures, setLineFailures] = useState(0);
@@ -56,6 +85,12 @@ export default function CaptchaPage() {
   const lineAttemptRef = useRef<() => boolean>(() => false);
   const imageAttemptRef = useRef<() => boolean>(() => false);
 
+  // Ref to track latest pass counts for use in timeouts
+  const linePassesRef = useRef(linePasses);
+  const imagePassesRef = useRef(imagePasses);
+  useEffect(() => { linePassesRef.current = linePasses; }, [linePasses]);
+  useEffect(() => { imagePassesRef.current = imagePasses; }, [imagePasses]);
+
   // ── Consent gate ──────────────────────────────────────────────
   useEffect(() => {
     const consented = sessionStorage.getItem("study_consented") === "true";
@@ -63,18 +98,17 @@ export default function CaptchaPage() {
       router.replace("/info-sheet");
       return;
     }
-    // Restore completion state from sessionStorage
-    const lineDone = sessionStorage.getItem("captcha_line_complete") === "true";
-    const imageDone = sessionStorage.getItem("captcha_image_complete") === "true";
-    if (lineDone && imageDone) {
-      // Both done — go to questionnaire
+    const storedLine = parseInt(sessionStorage.getItem("captcha_line_passes") || "0", 10);
+    const storedImage = parseInt(sessionStorage.getItem("captcha_image_passes") || "0", 10);
+    if (storedLine >= REQUIRED_PASSES && storedImage >= REQUIRED_PASSES) {
       router.replace("/questionnaire");
       return;
     }
-    setLineComplete(lineDone);
-    setImageComplete(imageDone);
-    // Start on the type that hasn't been completed yet
-    const startTab = lineDone ? "visual" : "line";
+    setLinePasses(storedLine);
+    setImagePasses(storedImage);
+    linePassesRef.current = storedLine;
+    imagePassesRef.current = storedImage;
+    const startTab = storedLine >= REQUIRED_PASSES ? "visual" : "line";
     setActiveTab(startTab);
     setReady(true);
   }, [router]);
@@ -87,35 +121,6 @@ export default function CaptchaPage() {
   const handleTimerChange = (time: string) => {
     setTimer(time ? `Time: ${time}` : "Time: --");
   };
-
-  const handleChallengeComplete = useCallback((success: boolean) => {
-    if (success) {
-      setVerified(true);
-      setVerifiedType(activeTab);
-      // Mark this CAPTCHA type as complete in sessionStorage
-      if (activeTab === "line") {
-        sessionStorage.setItem("captcha_line_complete", "true");
-        setLineComplete(true);
-      } else {
-        sessionStorage.setItem("captcha_image_complete", "true");
-        setImageComplete(true);
-      }
-      // Notify consuming applications
-      window.dispatchEvent(
-        new CustomEvent("captcha-verified", { detail: { type: activeTab } })
-      );
-      // Reset failure counters
-      setLineFailures(0);
-      setImageFailures(0);
-    } else {
-      // Increment failure counter for the active tab
-      if (activeTab === "line") {
-        setLineFailures((prev) => prev + 1);
-      } else {
-        setImageFailures((prev) => prev + 1);
-      }
-    }
-  }, [activeTab]);
 
   const loadChallenge = async (tab: "line" | "visual") => {
     setIsLoading(true);
@@ -147,7 +152,6 @@ export default function CaptchaPage() {
 
   const switchToTab = (tab: "line" | "visual") => {
     setActiveTab(tab);
-    // Reset failure counter for the tab we're leaving
     if (tab === "line") {
       setImageFailures(0);
     } else {
@@ -161,7 +165,6 @@ export default function CaptchaPage() {
     const tab = value as "line" | "visual";
     if (tab === activeTab) return;
 
-    // Check if there's an attempt in progress
     const inProgress =
       activeTab === "line"
         ? lineAttemptRef.current()
@@ -174,21 +177,78 @@ export default function CaptchaPage() {
     }
   };
 
-  const handleContinueAfterVerify = () => {
-    // Check if both CAPTCHAs are now complete
-    const lineDone = sessionStorage.getItem("captcha_line_complete") === "true";
-    const imageDone = sessionStorage.getItem("captcha_image_complete") === "true";
+  const handleContinueFromInterstitial = () => {
+    const lineDone = linePassesRef.current >= REQUIRED_PASSES;
+    const imageDone = imagePassesRef.current >= REQUIRED_PASSES;
+    setTypeJustCompleted(null);
 
     if (lineDone && imageDone) {
       router.push("/questionnaire");
     } else {
-      // Switch to the other CAPTCHA type
       const nextTab = lineDone ? "visual" : "line";
-      setVerified(false);
-      setVerifiedType(null);
       switchToTab(nextTab);
     }
   };
+
+  const handleChallengeComplete = useCallback((success: boolean, reason?: string) => {
+    if (success) {
+      const isLine = activeTab === "line";
+      const prevPasses = isLine ? linePassesRef.current : imagePassesRef.current;
+      const newCount = Math.min(prevPasses + 1, REQUIRED_PASSES);
+
+      if (isLine) {
+        setLinePasses(newCount);
+        linePassesRef.current = newCount;
+        sessionStorage.setItem("captcha_line_passes", String(newCount));
+        if (newCount >= REQUIRED_PASSES) {
+          sessionStorage.setItem("captcha_line_complete", "true");
+        }
+      } else {
+        setImagePasses(newCount);
+        imagePassesRef.current = newCount;
+        sessionStorage.setItem("captcha_image_passes", String(newCount));
+        if (newCount >= REQUIRED_PASSES) {
+          sessionStorage.setItem("captcha_image_complete", "true");
+        }
+      }
+
+      // Fire confetti
+      fireConfetti();
+
+      window.dispatchEvent(
+        new CustomEvent("captcha-verified", { detail: { type: activeTab } })
+      );
+      setLineFailures(0);
+      setImageFailures(0);
+
+      // Check if this type just hit 3/3 — show interstitial
+      const justCompleted = newCount >= REQUIRED_PASSES;
+      if (justCompleted) {
+        setTimeout(() => {
+          setTypeJustCompleted(isLine ? "line" : "visual");
+        }, AUTO_ADVANCE_DELAY_MS);
+      } else {
+        // Still more passes needed — auto-load next challenge
+        setTimeout(() => {
+          loadChallenge(activeTab);
+        }, AUTO_ADVANCE_DELAY_MS);
+      }
+    } else {
+      // Show failure tutorial popup
+      if (reason && reason !== "error") {
+        setFailureReason(reason);
+        setFailureCaptchaType(activeTab);
+        setFailureTutorialOpen(true);
+      }
+
+      if (activeTab === "line") {
+        setLineFailures((prev) => prev + 1);
+      } else {
+        setImageFailures((prev) => prev + 1);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, router]);
 
   // Load initial challenge once ready
   useEffect(() => {
@@ -208,18 +268,15 @@ export default function CaptchaPage() {
   const nudgeLabel =
     nudgeTarget === "line" ? "Trace the Path" : "Spot the Crossings";
 
-  // Don't render until consent check is done
   if (!ready) return null;
 
-  // Determine study progress
-  const bothComplete = lineComplete && imageComplete;
-
-  // ── Verified banner ─────────────────────────────────────────
-  if (verified) {
-    const otherDone =
-      verifiedType === "line" ? imageComplete : lineComplete;
-    const nextLabel =
-      verifiedType === "line" ? "Spot the Crossings" : "Trace the Path";
+  // ── Type-complete interstitial ──────────────────────────────────
+  if (typeJustCompleted) {
+    const completedLabel =
+      typeJustCompleted === "line" ? "Trace the Path" : "Spot the Crossings";
+    const bothDone = linePassesRef.current >= REQUIRED_PASSES && imagePassesRef.current >= REQUIRED_PASSES;
+    const otherLabel =
+      typeJustCompleted === "line" ? "Spot the Crossings" : "Trace the Path";
 
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center p-2 sm:p-4">
@@ -250,28 +307,32 @@ export default function CaptchaPage() {
                 </svg>
               </div>
               <p className="text-lg font-semibold text-green-500" role="status" aria-live="assertive">
-                Verified
+                {completedLabel} Complete!
               </p>
               <p className="text-sm text-muted-foreground">
-                You passed the{" "}
-                {verifiedType === "line" ? "Trace the Path" : "Spot the Crossings"}{" "}
-                challenge.
+                You passed all {REQUIRED_PASSES} attempts.
               </p>
 
-              {/* Progress indicators */}
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                <span className={lineComplete ? "text-green-500 font-medium" : ""}>
-                  {lineComplete ? "\u2713" : "\u25CB"} Trace the Path
-                </span>
-                <span className={imageComplete ? "text-green-500 font-medium" : ""}>
-                  {imageComplete ? "\u2713" : "\u25CB"} Spot the Crossings
-                </span>
+              {/* Progress for both types */}
+              <div className="flex flex-col gap-2 w-full max-w-[220px]">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-xs ${lineComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
+                    Trace the Path
+                  </span>
+                  <PassDots current={linePasses} total={REQUIRED_PASSES} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-xs ${imageComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
+                    Spot the Crossings
+                  </span>
+                  <PassDots current={imagePasses} total={REQUIRED_PASSES} />
+                </div>
               </div>
 
-              <Button onClick={handleContinueAfterVerify}>
-                {otherDone || bothComplete
+              <Button onClick={handleContinueFromInterstitial}>
+                {bothDone
                   ? "Continue to Questionnaire"
-                  : `Next: ${nextLabel}`}
+                  : `Next: ${otherLabel}`}
               </Button>
             </div>
           </CardContent>
@@ -295,14 +356,20 @@ export default function CaptchaPage() {
             Verify you&apos;re human — complete both challenges
           </p>
 
-          {/* Progress indicators */}
-          <div className="flex justify-center gap-4 text-xs text-muted-foreground pt-1">
-            <span className={lineComplete ? "text-green-500 font-medium" : ""}>
-              {lineComplete ? "\u2713" : "\u25CB"} Trace the Path
-            </span>
-            <span className={imageComplete ? "text-green-500 font-medium" : ""}>
-              {imageComplete ? "\u2713" : "\u25CB"} Spot the Crossings
-            </span>
+          {/* Progress for both types */}
+          <div className="flex flex-col gap-1.5 items-center pt-2">
+            <div className="flex items-center gap-3">
+              <span className={`text-xs w-28 text-right ${lineComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
+                {lineComplete ? "\u2713 " : ""}Trace the Path
+              </span>
+              <PassDots current={linePasses} total={REQUIRED_PASSES} />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={`text-xs w-28 text-right ${imageComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
+                {imageComplete ? "\u2713 " : ""}Spot the Crossings
+              </span>
+              <PassDots current={imagePasses} total={REQUIRED_PASSES} />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -425,6 +492,12 @@ export default function CaptchaPage() {
         </CardContent>
       </Card>
       <FeedbackWidget />
+      <FailureTutorial
+        open={failureTutorialOpen}
+        onDismiss={() => setFailureTutorialOpen(false)}
+        captchaType={failureCaptchaType}
+        failureReason={failureReason}
+      />
     </main>
   );
 }

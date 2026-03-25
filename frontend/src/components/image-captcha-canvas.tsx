@@ -13,7 +13,7 @@ interface ImageCaptchaCanvasProps {
   challenge: ImageChallenge | null;
   onStatusChange: (status: string, tone?: "info" | "error" | "success") => void;
   onTimerChange: (time: string) => void;
-  onChallengeComplete: (success: boolean) => void;
+  onChallengeComplete: (success: boolean, reason?: string) => void;
   onRequestNew: () => void;
   isAttemptInProgressRef?: React.MutableRefObject<() => boolean>;
 }
@@ -272,11 +272,11 @@ export function ImageCaptchaCanvas({
           msg = "Not quite right. Try again.";
         }
         onStatusChange(msg, "error");
-        onChallengeComplete(false);
+        onChallengeComplete(false, result.reason);
       }
     } catch (err) {
       onStatusChange("Verification error.", "error");
-      onChallengeComplete(false);
+      onChallengeComplete(false, "error");
     }
   }, [challenge, clicks, solved, submitted, onStatusChange, onChallengeComplete]);
 

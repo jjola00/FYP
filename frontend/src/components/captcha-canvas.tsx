@@ -14,7 +14,7 @@ interface CaptchaCanvasProps {
   challenge: Challenge | null;
   onStatusChange: (status: string, tone?: "info" | "error" | "success") => void;
   onTimerChange: (time: string) => void;
-  onChallengeComplete: (success: boolean) => void;
+  onChallengeComplete: (success: boolean, reason?: string) => void;
   isAttemptInProgressRef?: React.MutableRefObject<() => boolean>;
 }
 
@@ -383,11 +383,11 @@ export function CaptchaCanvas({
           if (timerHandleRef.current) clearInterval(timerHandleRef.current);
           onTimerChange("");
         }
-        onChallengeComplete(false);
+        onChallengeComplete(false, data.reason);
       }
     } catch {
       onStatusChange("Verification error.", "error");
-      onChallengeComplete(false);
+      onChallengeComplete(false, "error");
     }
   }, [challenge, onStatusChange, onTimerChange, onChallengeComplete]);
 
@@ -503,8 +503,9 @@ export function CaptchaCanvas({
       if (timerHandleRef.current) clearInterval(timerHandleRef.current);
       onTimerChange("");
       onStatusChange("Strayed too far.", "error");
+      onChallengeComplete(false, "low_coverage");
     }
-  }, [onTimerChange, onStatusChange]);
+  }, [onTimerChange, onStatusChange, onChallengeComplete]);
 
   // Animation loop — reads refs directly, no React dependency on pointer data
   useEffect(() => {

@@ -1,0 +1,11 @@
+[
+  {
+    "strategy": "hough",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 2678.684949874878,
+    "intersections_found": 7,
+    "clicks_made": 7
+  }
+]

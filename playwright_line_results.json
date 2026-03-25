@@ -1,0 +1,162 @@
+[
+  {
+    "strategy": "constant",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3506.1655044555664,
+    "points_generated": 99
+  },
+  {
+    "strategy": "constant",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3512.152671813965,
+    "points_generated": 99
+  },
+  {
+    "strategy": "constant",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3566.199779510498,
+    "points_generated": 100
+  },
+  {
+    "strategy": "constant",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3533.3950519561768,
+    "points_generated": 99
+  },
+  {
+    "strategy": "constant",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3687.7193450927734,
+    "points_generated": 103
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 3562.2811317443848,
+    "points_generated": 100
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 3687.2894763946533,
+    "points_generated": 104
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "trace the path complete!",
+    "solve_time_ms": 3697.9873180389404,
+    "points_generated": 104
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "error: Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"New Challenge\")\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4454.567193984985,
+    "points_generated": 101
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4108.69836807251,
+    "points_generated": 100
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "trace the path complete!",
+    "solve_time_ms": 4140.425205230713,
+    "points_generated": 99
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "error: Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"New Challenge\")\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4615.653514862061,
+    "points_generated": 104
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4409.972190856934,
+    "points_generated": 99
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "trace the path complete!",
+    "solve_time_ms": 4437.966346740723,
+    "points_generated": 101
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "error: Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"New Challenge\")\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  }
+]

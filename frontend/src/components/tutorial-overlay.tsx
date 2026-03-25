@@ -86,6 +86,25 @@ function LineTutorial() {
 }
 
 function ImageTutorial() {
+  // Three lines creating two intersections:
+  // Line A (pink):  (20,155) → (240,35)
+  // Line B (blue):  (20,50)  → (150,145)
+  // Line C (green): (140,25) → (240,155)
+  // Intersection 1 (A∩B) ≈ (104, 102)
+  // Intersection 2 (A∩C) ≈ (176, 69)
+
+  const ix1 = { x: 104, y: 102 };
+  const ix2 = { x: 176, y: 69 };
+
+  // Cursor path: start off-canvas bottom-left, move to ix1, then ix2
+  const cursorPath = `M40,160 L${ix1.x},${ix1.y} L${ix2.x},${ix2.y}`;
+
+  // 4s loop: move→pause(click1)→move→pause(click2)→brief reset
+  // keyPoints 0=start, 0.5=ix1, 1.0=ix2
+  const keyPoints = "0;0.5;0.5;1;1";
+  const keyTimes = "0;0.22;0.42;0.68;1";
+  const dur = "4s";
+
   return (
     <svg
       viewBox="0 0 260 180"
@@ -95,46 +114,41 @@ function ImageTutorial() {
       {/* Background */}
       <rect width="260" height="180" rx="8" fill="#0a0f1d" />
 
-      {/* Two crossing lines */}
-      <line
-        x1="40"
-        y1="150"
-        x2="220"
-        y2="30"
-        stroke="#e879f9"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <line
-        x1="40"
-        y1="40"
-        x2="230"
-        y2="140"
-        stroke="#38bdf8"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      {/* Three crossing lines */}
+      <line x1="20" y1="155" x2="240" y2="35" stroke="#e879f9" strokeWidth="3" strokeLinecap="round" />
+      <line x1="20" y1="50" x2="150" y2="145" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />
+      <line x1="140" y1="25" x2="240" y2="155" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
 
-      {/* Intersection marker — pulsing click */}
-      <circle cx="132" cy="88" r="12" fill="rgba(250,204,21,0.2)">
-        <animate
-          attributeName="r"
-          values="8;14;8"
-          dur="1.5s"
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="opacity"
-          values="0.4;0.15;0.4"
-          dur="1.5s"
-          repeatCount="indefinite"
-        />
+      {/* Click effect at intersection 1 — ripple ring */}
+      <circle cx={ix1.x} cy={ix1.y} r="6" fill="none" stroke="rgba(250,204,21,0.7)" strokeWidth="2">
+        <animate attributeName="r" values="4;4;4;6;18;18;18;18;18;18" dur={dur} repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0;0;0;0.8;0;0;0;0;0;0" dur={dur} repeatCount="indefinite" />
       </circle>
-      <circle cx="132" cy="88" r="6" fill="#FACC15">
-        <animate
-          attributeName="r"
-          values="5;7;5"
-          dur="1.5s"
+      {/* Click dot that stays */}
+      <circle cx={ix1.x} cy={ix1.y} r="0" fill="#FACC15">
+        <animate attributeName="r" values="0;0;0;6;6;6;6;6;6;0" dur={dur} repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0;0;0;0.9;0.9;0.9;0.9;0.9;0.9;0" dur={dur} repeatCount="indefinite" />
+      </circle>
+
+      {/* Click effect at intersection 2 — ripple ring */}
+      <circle cx={ix2.x} cy={ix2.y} r="6" fill="none" stroke="rgba(250,204,21,0.7)" strokeWidth="2">
+        <animate attributeName="r" values="4;4;4;4;4;4;4;6;18;18" dur={dur} repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0;0;0;0;0;0;0;0.8;0;0" dur={dur} repeatCount="indefinite" />
+      </circle>
+      {/* Click dot that stays */}
+      <circle cx={ix2.x} cy={ix2.y} r="0" fill="#FACC15">
+        <animate attributeName="r" values="0;0;0;0;0;0;0;6;6;0" dur={dur} repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0;0;0;0;0;0;0;0.9;0.9;0" dur={dur} repeatCount="indefinite" />
+      </circle>
+
+      {/* Animated cursor that moves to each intersection and pauses */}
+      <circle r="6" fill="#FACC15" opacity="0.9">
+        <animateMotion
+          path={cursorPath}
+          keyPoints={keyPoints}
+          keyTimes={keyTimes}
+          calcMode="linear"
+          dur={dur}
           repeatCount="indefinite"
         />
       </circle>
