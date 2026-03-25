@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { API_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +23,10 @@ export default function InfoSheetPage() {
     }
     // Mark that the study has started
     sessionStorage.setItem("study_step", "info");
+
+    // Pre-warm the backend (Render cold start can take 30-60s).
+    // Fire-and-forget while user reads the info sheet.
+    fetch(`${API_BASE}/health`).catch(() => {});
   }, [router]);
 
   return (

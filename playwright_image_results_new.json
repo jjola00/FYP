@@ -1,0 +1,542 @@
+[
+  {
+    "strategy": "hough",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 9756.346940994263,
+    "intersections_found": 35,
+    "clicks_made": 35
+  },
+  {
+    "strategy": "hough",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "failed to load",
+    "solve_time_ms": 19288.958072662354,
+    "intersections_found": 59,
+    "clicks_made": 59
+  },
+  {
+    "strategy": "hough",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "failed to load",
+    "solve_time_ms": 19478.384733200073,
+    "intersections_found": 59,
+    "clicks_made": 59
+  },
+  {
+    "strategy": "hough",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "failed to load",
+    "solve_time_ms": 19274.770736694336,
+    "intersections_found": 59,
+    "clicks_made": 59
+  },
+  {
+    "strategy": "hough",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "failed to load",
+    "solve_time_ms": 18968.40190887451,
+    "intersections_found": 59,
+    "clicks_made": 59
+  },
+  {
+    "strategy": "hough",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 7956.990718841553,
+    "intersections_found": 27,
+    "clicks_made": 27
+  },
+  {
+    "strategy": "hough",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 10558.878183364868,
+    "intersections_found": 38,
+    "clicks_made": 38
+  },
+  {
+    "strategy": "hough",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 5892.076730728149,
+    "intersections_found": 19,
+    "clicks_made": 19
+  },
+  {
+    "strategy": "hough",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 7211.041688919067,
+    "intersections_found": 24,
+    "clicks_made": 24
+  },
+  {
+    "strategy": "hough",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 5848.969221115112,
+    "intersections_found": 18,
+    "clicks_made": 18
+  },
+  {
+    "strategy": "hough",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 6093.995809555054,
+    "intersections_found": 20,
+    "clicks_made": 20
+  },
+  {
+    "strategy": "hough",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 8081.5324783325195,
+    "intersections_found": 29,
+    "clicks_made": 29
+  },
+  {
+    "strategy": "hough",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 8130.189895629883,
+    "intersections_found": 27,
+    "clicks_made": 27
+  },
+  {
+    "strategy": "hough",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 8403.535842895508,
+    "intersections_found": 30,
+    "clicks_made": 30
+  },
+  {
+    "strategy": "hough",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 9856.925964355469,
+    "intersections_found": 35,
+    "clicks_made": 35
+  },
+  {
+    "strategy": "hough",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 7124.3650913238525,
+    "intersections_found": 22,
+    "clicks_made": 22
+  },
+  {
+    "strategy": "hough",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 2785.4740619659424,
+    "intersections_found": 7,
+    "clicks_made": 7
+  },
+  {
+    "strategy": "hough",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "missed 2 intersections. try again.",
+    "solve_time_ms": 9859.111785888672,
+    "intersections_found": 35,
+    "clicks_made": 35
+  },
+  {
+    "strategy": "hough",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 12541.277647018433,
+    "intersections_found": 44,
+    "clicks_made": 44
+  },
+  {
+    "strategy": "hough",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 2932.755947113037,
+    "intersections_found": 7,
+    "clicks_made": 7
+  },
+  {
+    "strategy": "random",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1898.5650539398193,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1547.5242137908936,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "missed 2 intersections. try again.",
+    "solve_time_ms": 1631.850242614746,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1422.6303100585938,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1805.5729866027832,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1520.540475845337,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1755.8388710021973,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1489.671230316162,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1699.6090412139893,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1509.6302032470703,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1429.4788837432861,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1402.6076793670654,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1657.250165939331,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1663.3849143981934,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1451.8187046051025,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1493.105411529541,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1627.9082298278809,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1569.1943168640137,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "random",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1460.1593017578125,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "random",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "missed 3 intersections. try again.",
+    "solve_time_ms": 1903.9733409881592,
+    "intersections_found": 3,
+    "clicks_made": 3
+  },
+  {
+    "strategy": "center",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1526.327133178711,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1331.9017887115479,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1416.8791770935059,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "missed 2 intersections. try again.",
+    "solve_time_ms": 1379.5924186706543,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "missed 2 intersections. try again.",
+    "solve_time_ms": 1506.6676139831543,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1498.1684684753418,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1567.3670768737793,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1416.5747165679932,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "missed 3 intersections. try again.",
+    "solve_time_ms": 1460.9696865081787,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "not quite right. try again.",
+    "solve_time_ms": 1448.50754737854,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "missed 2 intersections. try again.",
+    "solve_time_ms": 1435.359001159668,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1489.2418384552002,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1446.9809532165527,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1328.5369873046875,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "missed 2 intersections. try again.",
+    "solve_time_ms": 1596.6684818267822,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1364.68505859375,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1600.3713607788086,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1354.764461517334,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "missed an intersection. try again.",
+    "solve_time_ms": 1464.0657901763916,
+    "intersections_found": 2,
+    "clicks_made": 2
+  },
+  {
+    "strategy": "center",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "missed 3 intersections. try again.",
+    "solve_time_ms": 1415.3070449829102,
+    "intersections_found": 2,
+    "clicks_made": 2
+  }
+]

@@ -1,0 +1,642 @@
+[
+  {
+    "strategy": "constant",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3671.534538269043,
+    "points_generated": 106
+  },
+  {
+    "strategy": "constant",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "failed_to_intercept_challenge",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "constant",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3532.8969955444336,
+    "points_generated": 102
+  },
+  {
+    "strategy": "constant",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3529.6645164489746,
+    "points_generated": 104
+  },
+  {
+    "strategy": "constant",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "relax - small wobbles are okay.",
+    "solve_time_ms": 3552.1178245544434,
+    "points_generated": 102
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "jittered",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4163.211822509766,
+    "points_generated": 104
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4184.495449066162,
+    "points_generated": 103
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "trace the path complete!",
+    "solve_time_ms": 4192.4333572387695,
+    "points_generated": 103
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "error: Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"New Challenge\")\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "curvature",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 1,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4572.248458862305,
+    "points_generated": 104
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 2,
+    "passed": false,
+    "failure_reason": "unknown",
+    "solve_time_ms": 4758.193492889404,
+    "points_generated": 102
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 3,
+    "passed": false,
+    "failure_reason": "trace the path complete!",
+    "solve_time_ms": 4312.403917312622,
+    "points_generated": 99
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 4,
+    "passed": false,
+    "failure_reason": "error: Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"New Challenge\")\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 5,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 6,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 7,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 8,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 9,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 10,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 11,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 12,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 13,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 14,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 15,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 16,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 17,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 18,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 19,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  },
+  {
+    "strategy": "humanlike",
+    "attempt": 20,
+    "passed": false,
+    "failure_reason": "error: Page.wait_for_selector: Timeout 8000ms exceeded.\nCall log:\n  - waiting for locator(\"canvas\") to be visible\n",
+    "solve_time_ms": 0,
+    "points_generated": 0
+  }
+]
