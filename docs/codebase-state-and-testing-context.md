@@ -19,9 +19,9 @@ A dual-CAPTCHA research system built around Moving Target Defense (MTD) principl
 - 10-second TTL, 75% coverage requirement, per-challenge tolerance jitter.
 
 ### 1b. Image Intersection CAPTCHA (Visual-Reasoning / Accessible Alternative)
-- 2-3 procedurally generated colored lines (straight, quadratic Bezier, cubic Bezier) drawn on a dark canvas.
+- 2-3 procedurally generated colored lines (straight, quadratic Bezier) drawn on a dark canvas.
 - User clicks on where lines intersect. Intersection coordinates are computed and stored server-side only, never sent to client.
-- 30-second TTL (intentionally longer -- accessibility path), 15px click tolerance (mouse), 22px (touch), 1 grace click allowed, 800ms minimum solve time.
+- 30-second TTL (intentionally longer -- accessibility path), 15px click tolerance (mouse), 22px (touch), no grace clicks (any stray click = fail), 800ms minimum solve time.
 - Exploits known VLM blind spots: ~58% VLM accuracy on line intersections (BlindTest, ACCV 2024), spatial click localization persistently hard even for GPT-5 (COGNITION, 2025).
 
 ---
@@ -46,7 +46,7 @@ A dual-CAPTCHA research system built around Moving Target Defense (MTD) principl
 | `backend/path.py` | Bezier path generation (6 families), geometric utilities (curvature profile, lookahead, nearest-point projection) |
 | `backend/config.py` | All tunable parameters. 13 boolean enforcement toggles for ablation testing via env vars |
 | `backend/captcha_token.py` | HMAC-SHA256 token sign/verify with constant-time comparison |
-| `backend/image_challenge.py` | Procedural image CAPTCHA generator. Vectorized segment-segment intersection finding with numpy |
+| `backend/image_challenge.py` | Procedural image CAPTCHA generator. Straight + quadratic Bezier lines. Vectorized segment-segment intersection finding with numpy |
 | `backend/image_validator.py` | Click validation via greedy distance matching with pointer-type-aware tolerances |
 | `backend/image_routes.py` | Image CAPTCHA API (`/captcha/image/generate`, `/captcha/image/validate`) |
 | `backend/db.py` | SQLite data layer. Tables: `challenges`, `attempt_logs`, `image_challenges`, `image_attempt_logs`, `feedback` |
@@ -268,7 +268,7 @@ Launches separate backend instances on different ports, each with one security t
 | Touch tolerance | 30px (path), jitter +/-3px | 22px (click), -- |
 | Min solve time | 1000ms | 800ms |
 | Coverage required | 75% | All intersections |
-| Grace | -- | 1 extra click |
+| Grace | -- | 0 (any stray click = fail) |
 | Min samples | 20 trajectory points | -- |
 | Rate limit | 30 req/60s | 30 req/60s |
 

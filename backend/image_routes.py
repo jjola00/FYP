@@ -64,7 +64,6 @@ def generate(request: Request) -> models.ImageNewChallengeResponse:
         lines=[models.ImageLineDefinition(**l) for l in client["lines"]],
         canvas=client["canvas"],
         instruction=client["instruction"],
-        numIntersections=client["numIntersections"],
     )
 
 

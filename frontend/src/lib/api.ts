@@ -177,7 +177,6 @@ export interface ImageChallenge {
     background: string;
   };
   instruction: string;
-  numIntersections: number;
 }
 
 export interface ImageVerifyResponse {

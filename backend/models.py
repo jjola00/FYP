@@ -91,7 +91,6 @@ class ImageNewChallengeResponse(BaseModel):
     lines: List[ImageLineDefinition]
     canvas: Dict[str, Any]
     instruction: str
-    numIntersections: int
 
 
 class ImageClickCoordinate(BaseModel):

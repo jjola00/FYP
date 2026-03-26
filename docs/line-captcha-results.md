@@ -39,7 +39,7 @@ Designed and implemented a trace-the-path CAPTCHA that achieves **100% bot rejec
 | Path shape | 6 families (horizontal, vertical, diagonal, S-curve) | Prevents path memorization |
 | Path seed | Cryptographic random | Unique per challenge |
 | Tolerance | Per-challenge jitter (±2-3px) | Prevents threshold probing |
-| TTL | 8 seconds | Limits computation time |
+| TTL | 10 seconds | Limits computation time |
 
 ### Oracle Degradation (Peek System)
 | Control | Implementation | Effect |
@@ -63,17 +63,31 @@ The system uses multiple independent signals, requiring **multiple flags** befor
 | `too_perfect` | Path deviation analysis | 2-15px natural wobble | <1px precision |
 | `regularity` | Coefficient of variation (Δt, Δd) | 8-30% timing variance | <5% machine consistency |
 | `speed_const` | Speed variance ratio | 15-40% variation | <8% constant velocity |
+| `accel_flag` | Max acceleration spike | Moderate acceleration | Extreme spikes |
+| `accel_sign_change` | Acceleration direction changes | Frequent reversals | Too few when speed is constant |
+| `speed_violation` | Instantaneous speed cap | Within human range | Exceeds MAX_SPEED_PX_PER_S |
 | `curvature_adaptation` | Speed at curves vs straights | Slows at curves | Uniform speed |
 | `ballistic_profile` | Acceleration pattern | Accel early, decel late | Flat profile |
 | `hesitation` | Micro-pause detection | Brief pauses at decisions | No pauses |
+| `progress_ok` | Monotonic path progress | Generally forward | Backtracking beyond 10px |
+| `too_fast` | Minimum solve duration | >1000ms | Below MIN_DURATION_MS |
 
 ### Detection Logic
 ```
-Rejection requires MULTIPLE signals:
+Standalone rejections:
+- too_perfect (alone — strongest signal)
+- speed_violation (instantaneous speed cap)
+- regularity (both timing and distance CV below thresholds)
+- curvature_flag (no speed adaptation to curvature)
+- progress_ok (non-monotonic path)
+- too_fast (below minimum duration)
+
+Composite rejections (require multiple corroborating signals):
 - (speed_const AND regularity)
 - (accel_flag AND regularity)
+- (accel_sign_change AND regularity)
 - (ballistic_flag AND hesitation_flag)
-- too_perfect (alone - strongest signal)
+- (hesitation_flag AND regularity)
 ```
 
 ### Why This Works
@@ -273,7 +287,7 @@ Layer 6: Client Binding (trajectory hash)
 | `backend/config.py` | Threshold tuning, new enforcement flags, peek decay parameters |
 | `backend/models.py` | Added `trajectoryHash`, `clientTimingMs` fields |
 | `backend/path.py` | Path variety (S-curves, diagonals, verticals) |
-| `frontend/app.js` | Visual feedback (deviation colors), progress indicator, trajectory hash computation |
+| `frontend/src/components/captcha-canvas.tsx` | Visual feedback (deviation colors), progress indicator, trajectory hash computation |
 
 ### Key Configuration Values
 ```python

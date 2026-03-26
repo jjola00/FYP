@@ -84,8 +84,7 @@ DATA_DIR = Path("data")
 DB_PATH = DATA_DIR / "captcha.db"
 
 # Security
-# SECRET_KEY used for HMAC tokens (set via env in production)
-SECRET_KEY = "change-me-to-a-secret-key"
+# SECRET_KEY is defined below (after POINTER_BEHAVIOR) via env var
 
 # Behavioural thresholds (fallbacks)
 SPEED_CONSTANTITY_RATIO = 0.08  # std/mean below this is suspiciously constant
@@ -150,6 +149,15 @@ POINTER_BEHAVIOR = {
 
 # Secret key for signing tokens (use env override in production)
 SECRET_KEY = os.getenv("LINE_CAPTCHA_SECRET", "dev-secret-change-me")
+
+# Warn loudly if running in production with the default dev secret
+if os.getenv("RENDER") and SECRET_KEY == "dev-secret-change-me":
+    import warnings
+    warnings.warn(
+        "\n\n*** SECURITY WARNING: LINE_CAPTCHA_SECRET is using the default dev key! "
+        "Set a real secret in Render environment variables. ***\n",
+        stacklevel=1,
+    )
 
 # ─── Image CAPTCHA (line intersection click challenge) ───────────
 IMAGE_CANVAS_WIDTH_PX = 400

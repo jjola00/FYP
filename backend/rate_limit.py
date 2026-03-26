@@ -22,8 +22,9 @@ class RateLimiter:
         self._log[key].append(now)
 
 
-# Generous for CAPTCHA endpoints (testers will click a lot)
-challenge_limiter = RateLimiter(window_s=60, max_requests=30)
+# Generous for CAPTCHA endpoints — 60 req/60s to handle computer lab NAT
+# where multiple participants share a single public IP address.
+challenge_limiter = RateLimiter(window_s=60, max_requests=60)
 
 # Strict for feedback
 feedback_limiter = RateLimiter(window_s=60, max_requests=3)

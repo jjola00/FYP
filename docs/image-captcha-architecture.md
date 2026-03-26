@@ -32,11 +32,10 @@ The image CAPTCHA is **not** layered on top of the line CAPTCHA. They are **inde
 ## 2. Core Challenge Specification
 
 ### What the User Sees
-- A canvas displaying 2–4 coloured lines (mix of straight and curved/Bézier)
-- Lines intersect at 1–5 points
-- Optional: faint distractor elements (non-intersecting lines, dots, geometric shapes)
-- Clear instruction text: e.g., "Click on all the points where the lines cross"
-- A countdown timer matching the line CAPTCHA's TTL
+- A canvas displaying 2–3 coloured lines (straight segments and quadratic Bezier curves)
+- Lines intersect at 1–3 points
+- Clear instruction text: randomly selected from 10 equivalent phrasings (e.g., "Click where the lines cross")
+- A countdown timer (30 seconds)
 
 ### What the User Does
 - Clicks/taps on each intersection point
@@ -44,9 +43,10 @@ The image CAPTCHA is **not** layered on top of the line CAPTCHA. They are **inde
 - Submits when done
 
 ### What Constitutes a Pass
-- All intersection points clicked within a tolerance radius (~15px)
-- No extra clicks on non-intersection areas (tolerance for 1 accidental click)
-- Completed within the TTL
+- All intersection points clicked within a tolerance radius (15px mouse, 22px touch/pen)
+- No stray clicks — any click not near an intersection causes immediate rejection
+- Completed within the 30-second TTL
+- Solve time above 800ms minimum
 
 ---
 
@@ -59,29 +59,31 @@ The image CAPTCHA is **not** layered on top of the line CAPTCHA. They are **inde
 │                CHALLENGE GENERATOR                     │
 │                                                       │
 │  1. Random Parameters                                 │
-│     ├── num_lines: random(2, 4)                       │
-│     ├── line_types: random mix of straight + Bézier   │
-│     ├── colours: random from distinct palette          │
-│     ├── thickness: random(2px, 5px)                   │
-│     ├── canvas_size: consistent (e.g., 400x400)       │
-│     └── distractor_count: random(0, 3)                │
+│     ├── num_lines: random(2, 3)                       │
+│     ├── line_types: straight or quadratic Bezier      │
+│     ├── colours: sampled without replacement from 8   │
+│     ├── thickness: random uniform(2.0, 5.0) px        │
+│     └── canvas_size: 400x400 px                       │
 │                                                       │
 │  2. Line Generation                                   │
-│     ├── Generate control points for each line         │
-│     ├── For Bézier: generate 2–3 control points       │
-│     ├── Ensure lines actually intersect               │
-│     └── Calculate exact intersection coordinates      │
+│     ├── Generate control points per line              │
+│     ├── Straight: 2 points, Quadratic: 3 points      │
+│     ├── Min length enforced (40% / 30% of canvas)     │
+│     └── Calculate intersections via vectorised numpy   │
 │                                                       │
-│  3. Distractor Generation (optional)                  │
-│     ├── Non-intersecting lines in muted colours       │
-│     ├── Geometric shapes (circles, dots)              │
-│     └── Faint grid or pattern overlay                 │
+│  3. Intersection Validation                           │
+│     ├── Accept if 1-3 intersections found             │
+│     ├── Retry up to 50 times if out of range          │
+│     └── Fallback: force intersection through existing │
+│         curve at random angle                          │
 │                                                       │
 │  4. Output                                            │
-│     ├── Canvas render data (sent to client)           │
-│     ├── Intersection coordinates (stored server-side) │
-│     ├── Challenge token (tied to session)             │
-│     └── TTL timestamp                                 │
+│     ├── client_data: line defs, canvas config,        │
+│     │   instruction text, intersection count          │
+│     ├── server_data: intersection coordinates         │
+│     │   (NEVER sent to client)                        │
+│     ├── HMAC-SHA256 challenge token                   │
+│     └── 30-second TTL                                 │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -89,18 +91,13 @@ The image CAPTCHA is **not** layered on top of the line CAPTCHA. They are **inde
 
 ### 3.2 Intersection Calculation
 
-For straight lines:
-```
-Line 1: y = m1*x + b1
-Line 2: y = m2*x + b2
-Intersection: x = (b2 - b1) / (m1 - m2), y = m1*x + b1
-```
+Intersection detection uses a vectorised parametric cross-product method (implemented in `image_challenge.py`):
 
-For Bézier curves — use numerical methods:
-- Sample both curves at high resolution (e.g., 1000 points)
-- Find pairs of sample points from different curves within a threshold distance
-- Refine intersection via binary search / Newton-Raphson
-- Store sub-pixel accurate coordinates server-side
+- Each curve is sampled at 500 points, producing a dense polyline
+- All segment pairs across curves are tested using the 2D parametric formulation: `A1 + t*(A2-A1) = B1 + s*(B2-B1)`, solved via cross-products
+- Valid intersections require both t and s in [0, 1]
+- Raw intersection hits within a 3px radius are clustered by greedy centroid merging
+- Points outside the canvas margin are filtered out
 
 ### 3.3 Client-Side Rendering
 
@@ -143,22 +140,27 @@ For Bézier curves — use numerical methods:
 │     └── Token matches session                     │
 │                                                   │
 │  2. Click Validation                              │
-│     ├── For each known intersection point:        │
-│     │   └── Is there a click within TOLERANCE?    │
-│     ├── Are there excess clicks? (allow 1 grace)  │
-│     └── Total clicks ≈ total intersections?       │
+│     ├── Distance matrix: all clicks vs all        │
+│     │   intersections (numpy vectorised)          │
+│     ├── Any click > tolerance from ALL            │
+│     │   intersections = stray click = FAIL        │
+│     ├── Greedy assignment: each intersection      │
+│     │   matched to nearest unused click           │
+│     └── Pass only if all intersections matched    │
 │                                                   │
 │  3. Timing Validation                             │
-│     ├── Was it solved too fast? (< 500ms = bot)   │
-│     └── Was it solved within TTL?                 │
+│     ├── Was it solved too fast? (< 800ms = bot)   │
+│     └── Was it solved within TTL? (30s)           │
 │                                                   │
 │  4. Result                                        │
-│     ├── PASS: all intersections clicked, timing OK │
-│     ├── FAIL: missing intersections or excess      │
+│     ├── PASS: all intersections clicked, no stray │
+│     │   clicks, timing OK                         │
+│     ├── FAIL: missed intersections, stray clicks, │
+│     │   too fast, or no clicks                    │
 │     └── EXPIRED: TTL exceeded                     │
 │                                                   │
-│  TOLERANCE_RADIUS = 15px (configurable)           │
-│  MIN_SOLVE_TIME = 500ms                           │
+│  TOLERANCE: 15px mouse, 22px touch/pen            │
+│  MIN_SOLVE_TIME = 800ms                           │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -172,30 +174,28 @@ Every parameter below is randomised per challenge generation:
 
 | Parameter | Range | Purpose |
 |---|---|---|
-| `num_lines` | 2–4 | Varies visual complexity |
-| `line_type` | straight, quadratic Bézier, cubic Bézier | Defeats Hough Transform (straight-line detector) |
-| `num_intersections` | 1–5 | Varies answer complexity |
-| `line_colours` | Random from 8+ high-contrast palette | Prevents colour-based template matching |
-| `line_thickness` | 2–5px | Varies edge detection characteristics |
-| `canvas_background` | White/light grey/subtle gradient | Minor variation |
-| `distractor_count` | 0–3 | Adds geometric mask-style confusion for CV |
-| `distractor_types` | Lines, circles, dots, faint shapes | Diversity of noise |
-| `instruction_text` | Randomly selected from equivalent phrasings | Defeats prompt template matching |
+| `num_lines` | 2–3 | Varies visual complexity |
+| `line_type` | straight, quadratic Bezier | Defeats Hough Transform (straight-line detector) |
+| `num_intersections` | 1–3 | Varies answer complexity |
+| `line_colours` | Sampled without replacement from 8 high-contrast colours | Prevents colour-based template matching |
+| `line_thickness` | 2.0–5.0px (uniform random) | Varies edge detection characteristics |
+| `canvas_background` | White / light grey (#FFFFFF, #F5F5F5, #FAFAFA, #F0F0F0) | Minor variation |
+| `instruction_text` | Randomly selected from 10 equivalent phrasings | Defeats prompt template matching |
 
 ### 4.2 Timing Function (T)
 
-- **TTL:** Match the line CAPTCHA's TTL exactly (TODO: confirm value)
-- **Token generation:** Server issues a cryptographically signed token with embedded expiry
-- **One-use:** Token is invalidated after first validation attempt (pass or fail)
+- **TTL:** 30 seconds (intentionally longer than the line CAPTCHA's 10s — accessibility path needs more time for spatial reasoning + clicking)
+- **Token generation:** Server issues an HMAC-SHA256 signed token with embedded expiry
+- **One-use:** Token is invalidated after first validation attempt (pass or fail); replays receive HTTP 410 Gone
 - **No replay:** Same challenge cannot be submitted twice
 
 ### 4.3 Configuration Set (C) — Size Estimate
 
 Conservative lower bound:
 ```
-3 line counts × 3 line types × 8 colours × 5 intersection counts × 
-100+ position variations × 4 distractor configs × 5 instruction variants
-= 720,000+ unique configurations
+2 line counts × 2 line types × 8 colours × 3 intersection counts ×
+100+ position variations × 10 instruction variants
+= 96,000+ unique configurations
 ```
 
 With continuous randomisation of positions, the actual space is effectively infinite.
@@ -210,15 +210,14 @@ With continuous randomisation of positions, the actual space is effectively infi
 - Combined counting + localization: compounds difficulty
 
 ### Layer 2: Classical CV Resistance (Design-based — mixed evidence)
-- Bézier curves defeat Hough Transform (straight-line detector)
-- Distractor elements confuse edge detection pipelines
+- Quadratic Bezier curves defeat Hough Transform (straight-line detector)
 - Canvas rendering (not static image) prevents trivial extraction
 - Varying line thickness and colours complicates thresholding
 
 ### Layer 3: Timing Resistance (Research-backed)
-- Short TTL defeats CAPTCHA farm relay (30–45s relay > TTL)
-- Minimum solve time (500ms) catches instant bot submissions
-- One-use tokens prevent replay attacks
+- 30-second TTL constrains CAPTCHA farm relay (30–45s relay overhead leaves very tight window)
+- Minimum solve time (800ms) catches instant bot submissions
+- One-use tokens prevent replay attacks; replays receive HTTP 410
 
 ### Layer 4: Server-Side Security (Standard practice)
 - Answer coordinates never exposed to client
@@ -299,15 +298,19 @@ Lines should be visually distinct from each other and from distractors:
 
 ---
 
-## 8. Difficulty Scaling
+## 8. Challenge Parameters
 
-| Level | Lines | Intersections | Distractors | Line Types | Use Case |
-|---|---|---|---|---|---|
-| Easy | 2 | 1 | 0 | Straight only | First attempt, accessibility |
-| Medium | 3 | 2–3 | 1–2 | Mix straight + Bézier | Standard challenge |
-| Hard | 4 | 3–5 | 2–3 | Mostly Bézier | After failed attempts or suspicious behaviour |
+The implementation uses a single difficulty level with randomised parameters:
 
-Start at Easy/Medium. Escalate to Hard only if bot-like behaviour is detected (instant solves, repeated failures, suspicious patterns).
+| Parameter | Range |
+|---|---|
+| Lines | 2–3 |
+| Intersections | 1–3 |
+| Line Types | Straight + Quadratic Bezier (random per line) |
+| Colours | 8 high-contrast, sampled without replacement |
+| Thickness | 2.0–5.0px uniform random |
+
+No difficulty tiers are implemented. Variation comes from per-session randomisation (MTD movement strategy), not progressive difficulty.
 
 ---
 
@@ -316,26 +319,27 @@ Start at Easy/Medium. Escalate to Hard only if bot-like behaviour is detected (i
 This should integrate with the existing FYP codebase (FastAPI backend).
 
 ### Backend (Python / FastAPI)
-- `challenge_generator.py` — procedural line + intersection generation
-- `validator.py` — click validation with tolerance
-- `token_manager.py` — cryptographic token issuance and validation
-- Dependencies: `numpy` (geometry calculations), `secrets` (tokens)
+- `image_challenge.py` — procedural line + intersection generation (vectorised numpy)
+- `image_validator.py` — click validation with pointer-type-aware tolerances
+- `image_routes.py` — API endpoints (generate + validate)
+- `captcha_token.py` — HMAC-SHA256 token signing/verification (shared with line CAPTCHA)
+- Dependencies: `numpy` (geometry calculations), `fastapi`, `pydantic`
 
-### Frontend (React / Canvas)
-- `ImageCaptcha.tsx` — main component
-- HTML5 Canvas for rendering (no image files)
+### Frontend (Next.js / React / Canvas)
+- `image-captcha-canvas.tsx` — main canvas component (~340 lines)
+- HTML5 Canvas rendering of lines and click markers
 - Click event handling with coordinate capture
-- Timer component
-- State management for clicks (add, undo, submit)
+- Keyboard accessibility (arrow keys + Enter/Space for clicks, Backspace for undo)
+- Timer display, click counter, undo/submit buttons
 
 ### API Endpoints
 ```
-POST /api/captcha/image/generate
-  → Returns: { token, lines[], distractors[], ttl, instruction }
+POST /captcha/image/generate
+  → Returns: { challengeId, token, ttlMs, expiresAt, lines[], canvas, instruction, numIntersections }
 
-POST /api/captcha/image/validate
-  ← Receives: { token, clicks: [{x, y}] }
-  → Returns: { passed: boolean, message: string }
+POST /captcha/image/validate
+  ← Receives: { challengeId, token, clicks: [{x, y}], pointerType }
+  → Returns: { passed, reason, matched, expected, excess, tooFast }
 ```
 
 ---
@@ -399,11 +403,11 @@ POST /api/captcha/image/validate
 
 ---
 
-## 12. Open Questions / TODOs
+## 12. Resolved Design Decisions
 
-- [ ] **Confirm line CAPTCHA TTL** — image CAPTCHA TTL must match
-- [ ] **Decide exact tolerance radius** — 15px is initial estimate, needs user testing
-- [ ] **Bézier intersection algorithm** — choose between sampling-based vs analytical approach
-- [ ] **Distractor design** — what specific geometric elements confuse CV without confusing humans?
-- [ ] **Colour blindness accessibility** — ensure line pairs are distinguishable under all common colour vision types (use shape/dash patterns as backup)
-- [ ] **Maximum intersections** — research says subitizing limit is 4–6 items; cap at 4 for safety?
+- **TTL:** 30 seconds (intentionally different from line CAPTCHA's 10s — accessibility path needs more time)
+- **Tolerance radius:** 15px mouse, 22px touch/pen — empirically tuned during pilot testing
+- **Intersection algorithm:** Vectorised segment-segment cross-product method with 500-point sampling and 3px greedy clustering
+- **No distractors:** Removed from implementation — clean visual presentation prioritised for accessibility
+- **No difficulty tiers:** Single randomised configuration; variation comes from MTD per-session generation
+- **Maximum intersections:** Capped at 3 (within subitizing range)

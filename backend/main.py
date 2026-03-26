@@ -16,7 +16,10 @@ app = fastapi.FastAPI(title="Ephemeral Line CAPTCHA")
 
 # CORS: Use ALLOWED_ORIGINS env var (comma-separated) or default to localhost for dev
 import os
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:9002").split(",")
+_allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,

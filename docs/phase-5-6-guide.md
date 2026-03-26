@@ -10,7 +10,7 @@ This document is a self-contained reference for implementing the final two phase
 
 1. **Line Tracing CAPTCHA** (motor-control) — fully implemented. The user presses a start point and traces a progressively revealed Bézier path. Server validates trajectory, timing, and 11 behavioural signals (speed constancy, curvature adaptation, ballistic profile, hesitation, etc.).
 
-2. **Image Intersection CAPTCHA** (accessible alternative) — Phases 1–4 complete. The user sees 2–4 procedurally generated lines (straight + Bézier curves) on an HTML5 Canvas and clicks the intersection points. Server validates clicks against stored coordinates within a tolerance radius.
+2. **Image Intersection CAPTCHA** (accessible alternative) — Phases 1–4 complete. The user sees 2–3 procedurally generated lines (straight + quadratic Bezier curves) on an HTML5 Canvas and clicks the intersection points. Server validates clicks against stored coordinates within a tolerance radius (15px mouse, 22px touch).
 
 Both CAPTCHAs are framed through an MTD (Moving Target Defense) ⟨M, T, C⟩ model: every challenge is procedurally unique, time-limited, and single-use.
 
@@ -32,8 +32,8 @@ Both CAPTCHAs are framed through an MTD (Moving Target Defense) ⟨M, T, C⟩ mo
 | `db.py` | SQLite database layer. Tables: `challenges` (line CAPTCHA), `image_challenges` (image CAPTCHA), `attempt_logs` (line CAPTCHA verification audit trail). Functions: `init_db()`, `save_challenge()`, `get_challenge()`, `mark_challenge_used()`, `update_peek_progress()`, `save_attempt()`, `save_image_challenge()`, `get_image_challenge()`, `mark_image_challenge_used()`. |
 | `path.py` | Line CAPTCHA path generation and geometry. Pure Python (no numpy). 6 path families (horizontal_lr/rl, vertical_tb/bt, diagonal, s_curve). Key exports: `generate_path(seed)`, `lookahead()`, `position_along_path()`, `min_distance_to_polyline()`, `curvature_profile()`, `cumulative_lengths()`. |
 | `captcha_token.py` | HMAC-SHA256 token signing/verification shared by both CAPTCHAs. `sign(payload) → str`, `verify(token) → dict`. Token format: `base64(json).base64(hmac_sig)`. |
-| `image_challenge.py` | Image CAPTCHA core generator. Generates lines (straight, quadratic Bézier, cubic Bézier), calculates intersections via vectorised numpy segment-segment tests, produces distractors (non-intersecting lines, near-miss fragments, geometric shapes). Main entry: `generate_challenge(difficulty)` → `{client_data, server_data}`. |
-| `image_validator.py` | Image CAPTCHA click validation. `validate_clicks(clicks, intersections, solve_time_ms)` — tolerance-radius matching using numpy distance matrix, greedy matching, grace click allowance, min solve time enforcement (800ms, toggled by `ENFORCE_IMAGE_MIN_SOLVE`). |
+| `image_challenge.py` | Image CAPTCHA core generator. Generates lines (straight, quadratic Bezier), calculates intersections via vectorised numpy segment-segment tests. Main entry: `generate_challenge()` → `{client_data, server_data}`. |
+| `image_validator.py` | Image CAPTCHA click validation. `validate_clicks(clicks, intersections, solve_time_ms, pointer_type)` — tolerance-radius matching using numpy distance matrix, greedy matching, no grace clicks (any stray click = fail), min solve time enforcement (800ms, toggled by `ENFORCE_IMAGE_MIN_SOLVE`). |
 | `image_routes.py` | Image CAPTCHA FastAPI Router. `POST /captcha/image/generate` — generates challenge, signs token, stores intersections in DB, returns client-safe data. `POST /captcha/image/validate` — verifies token, checks TTL, validates clicks, marks challenge as used. |
 | `requirements.txt` | `fastapi==0.115.5`, `uvicorn==0.29.0`, `pydantic>=2.0`, `numpy>=1.24.0` |
 
@@ -43,7 +43,7 @@ Both CAPTCHAs are framed through an MTD (Moving Target Defense) ⟨M, T, C⟩ mo
 |---|---|
 | `app/page.tsx` | Main page. Card layout with tabs ("Line CAPTCHA" / "Visual CAPTCHA"). Manages `activeTab` state, challenge loading, status/timer display, "New Challenge" button. Renders `CaptchaCanvas` or `ImageCaptchaCanvas` based on active tab. |
 | `components/captcha-canvas.tsx` | Line CAPTCHA canvas component (~552 lines). HTML5 Canvas rendering with requestAnimationFrame loop, progressive path revelation via peek API, pointer capture, trail fade animation, colour-coded deviation feedback, trajectory hashing. Props: `challenge`, `onStatusChange`, `onTimerChange`, `onChallengeComplete`. |
-| `components/image-captcha-canvas.tsx` | Image CAPTCHA canvas component (~340 lines). Renders challenge lines, distractor lines (with opacity via `globalAlpha`), distractor shapes (circles/rectangles), click markers (yellow #FACC15 with dark border #1a1a2e). Click counter dots, Undo Last / Submit buttons, "Request new challenge" link, countdown timer. Props: `challenge`, `onStatusChange`, `onTimerChange`, `onChallengeComplete`, `onRequestNew`. |
+| `components/image-captcha-canvas.tsx` | Image CAPTCHA canvas component (~340 lines). Renders challenge lines (straight + quadratic Bezier), click markers (yellow #FACC15 with dark border #1a1a2e). Click counter dots, Undo Last / Submit buttons, "Request new challenge" link, countdown timer, keyboard accessibility (arrow keys + Enter/Space). Props: `challenge`, `onStatusChange`, `onTimerChange`, `onChallengeComplete`, `onRequestNew`. |
 | `lib/api.ts` | API client. Types: `Challenge`, `TrajectoryPoint`, `ImageChallenge`, `ImageLineDefinition`, `ImageDistractorShape`, `ImageVerifyResponse`. Functions: `fetchChallenge()`, `verifyAttempt()`, `fetchLookahead()`, `computeTrajectoryHash()`, `fetchImageChallenge()`, `verifyImageAttempt()`. Uses `fetchWithTimeout()` with 60s timeout (for Render cold starts). Session ID via `sessionStorage`. |
 | `components/theme-toggle.tsx` | Dark/light mode toggle button. |
 | `components/theme-provider.tsx` | next-themes context wrapper. |
@@ -62,7 +62,7 @@ nonce_used INTEGER DEFAULT 0, created_at REAL
 **`image_challenges` (image CAPTCHA)**
 ```sql
 id TEXT PRIMARY KEY, intersections_json TEXT, num_intersections INTEGER,
-difficulty TEXT, ttl_ms INTEGER, used INTEGER DEFAULT 0, created_at REAL
+ttl_ms INTEGER, used INTEGER DEFAULT 0, created_at REAL
 ```
 
 **`attempt_logs` (line CAPTCHA audit trail)**
@@ -101,12 +101,8 @@ All set via `os.getenv()` or `_env_bool()` in `config.py`:
 | `IMAGE_CAPTCHA_TTL_MS` | `30000` | int | Challenge time-to-live |
 | `IMAGE_MIN_SOLVE_MS` | `800` | int | Minimum solve time (bot detection) |
 | `ENFORCE_IMAGE_MIN_SOLVE` | `True` | bool | Toggle min-solve enforcement |
-| `IMAGE_CLICK_TOLERANCE_PX` | `15` | int | Click-to-intersection match radius |
-| `IMAGE_MAX_EXTRA_CLICKS` | `1` | int | Grace clicks beyond expected |
-| `IMAGE_DISTRACTOR_OPACITY_MIN` | `0.3` | float | Distractor opacity lower bound |
-| `IMAGE_DISTRACTOR_OPACITY_MAX` | `0.5` | float | Distractor opacity upper bound |
-| `ENFORCE_IMAGE_DISTRACTORS` | `True` | bool | Toggle distractor generation |
-| `IMAGE_NEAR_MISS_GAP_PX` | `8.0` | float | Gap for near-miss distractors |
+| `IMAGE_CLICK_TOLERANCE_MOUSE_PX` | `15` | int | Click-to-intersection match radius (mouse) |
+| `IMAGE_CLICK_TOLERANCE_TOUCH_PX` | `22` | int | Click-to-intersection match radius (touch/pen) |
 | `IMAGE_BEZIER_SAMPLE_RESOLUTION` | `500` | int | Curve sampling density |
 | `IMAGE_INTERSECTION_CLUSTER_RADIUS_PX` | `3.0` | float | Intersection dedup threshold |
 | `IMAGE_MAX_GENERATION_RETRIES` | `50` | int | Retry budget per challenge |
@@ -273,12 +269,9 @@ Create `backend/tests/` directory. Use `pytest`. Required test files:
 # 3. Known Bézier curves with pre-computed intersection → verify within 2px
 # 4. Line entirely outside canvas margin → 0 intersections counted
 # 5. Clustering: two raw intersections within 3px → merged to 1
-# 6. Difficulty presets produce correct line/intersection count ranges
-#    - easy: 2 lines, 1 intersection
-#    - medium: 2-3 lines, 1-3 intersections
-#    - hard: 3-4 lines, 2-5 intersections
-# 7. generate_challenge() always returns at least 1 intersection (guarantee fallback)
-# 8. Run 100 generations per difficulty → all produce valid intersection counts
+# 6. generate_challenge() always returns at least 1 intersection (guarantee fallback)
+# 7. Run 100 generations → all produce 1-3 intersections
+# 8. Line types are only "straight" or "quadratic"
 ```
 
 #### `test_image_validator.py` — Tolerance and Edge Cases
@@ -288,8 +281,8 @@ Create `backend/tests/` directory. Use `pytest`. Required test files:
 # 1. Click exactly on intersection → pass
 # 2. Click at tolerance boundary (15px away) → pass
 # 3. Click at 16px away → fail (missed)
-# 4. All intersections clicked + 1 extra → pass (grace click)
-# 5. All intersections clicked + 2 extra → fail (too many extra)
+# 4. All intersections clicked + 1 stray click → fail (no grace clicks)
+# 5. All intersections clicked + duplicate near same intersection → pass (not a stray)
 # 6. Solve time 500ms → fail (too fast, threshold is 800ms)
 # 7. Solve time 800ms → pass
 # 8. Solve time 801ms → pass
@@ -308,15 +301,15 @@ Create `backend/tests/` directory. Use `pytest`. Required test files:
 # 5. Expired challenge: wait > TTL → validate returns "challenge expired"
 ```
 
-#### `test_distractors.py` — Distractor Non-Intersection
+#### `test_image_generation.py` — Generation Consistency
 
 ```python
 # Test cases:
-# 1. Generate 100 medium challenges → no distractor intersects any challenge line
-# 2. Generate 100 hard challenges → same verification
-# 3. ENFORCE_IMAGE_DISTRACTORS=False → distractors list is empty
-# 4. Easy difficulty → 0 distractors
-# 5. Distractor opacity is within configured min/max range
+# 1. Generate 100 challenges → all produce 1-3 intersections
+# 2. All generated lines are either "straight" or "quadratic" type
+# 3. Colours are sampled from COLOUR_PALETTE without replacement
+# 4. Line thickness is within 2.0-5.0 range
+# 5. Fallback mechanism produces valid intersections when random loop exhausts retries
 ```
 
 #### `test_image_routes.py` — API Integration Tests
@@ -342,10 +335,8 @@ Use FastAPI's `TestClient` (requires `httpx`):
 CREATE TABLE IF NOT EXISTS image_attempt_logs (
     attempt_id TEXT PRIMARY KEY,
     challenge_id TEXT NOT NULL,
-    difficulty TEXT NOT NULL,
     num_lines INTEGER NOT NULL,
     num_intersections INTEGER NOT NULL,
-    num_distractors INTEGER NOT NULL,
     num_clicks INTEGER NOT NULL,
     matched INTEGER NOT NULL,
     excess INTEGER NOT NULL,
@@ -420,8 +411,7 @@ For the FYP writeup, the following metrics should be extractable from the logs:
 **From `image_attempt_logs`:**
 - First-attempt solve rate (target: >90%)
 - Average solve time in ms (target: <8000ms)
-- Failure reasons distribution (missed intersections, too many extra clicks, too fast, expired)
-- Solve rate by difficulty level
+- Failure reasons distribution (missed intersections, stray clicks, too fast, expired)
 - Average excess clicks per attempt
 
 **From `attempt_logs` (line CAPTCHA — already exists):**
@@ -443,7 +433,7 @@ Create a `backend/scripts/export_metrics.py` script that queries both tables and
 | VLM solve rate (Gemini) | `test_vlm_attack.py` | <60% |
 | Hough Transform solve rate (straight lines) | `test_hough_transform.py` | High (known weakness) |
 | Hough Transform solve rate (Bézier curves) | `test_hough_transform.py` | Low (design goal) |
-| Distractor impact on VLM | Compare with/without | Measurable reduction |
+| Bezier impact on Hough Transform | Compare straight-only vs mixed | Measurable reduction |
 | Relay viability within TTL | `test_relay_timing.py` | Tight/infeasible margin |
 | Human first-attempt solve rate (line) | `attempt_logs` | >90% |
 | Human avg completion time (line) | `attempt_logs` | <5s |
@@ -467,15 +457,15 @@ These decisions are intentional and backed by research or user testing. A fresh 
 | Decision | Value | Rationale |
 |---|---|---|
 | Image CAPTCHA TTL | 30s | Accessibility path — spatial reasoning + clicking takes longer than motor tracing. Line CAPTCHA is 10s. Both intentional. |
-| Click tolerance | 15px | Balanced: 10px is frustrating on mobile, 20px is too forgiving for bots. Env-configurable via `IMAGE_CLICK_TOLERANCE_PX`. |
-| Grace clicks | 1 | Forgiveness for one accidental misclick. More than 1 could be brute-force attempts. |
+| Click tolerance | 15px mouse, 22px touch/pen | Balanced per pointer type: 10px is frustrating on mobile, 20px+ is too forgiving for mouse. Env-configurable via `IMAGE_CLICK_TOLERANCE_MOUSE_PX` / `IMAGE_CLICK_TOLERANCE_TOUCH_PX`. |
+| Grace clicks | 0 | No grace clicks — any stray click (not near any intersection) causes immediate rejection. Strict validation ensures bots cannot brute-force with extra clicks. |
 | Min solve time | 800ms | Below this is bot-like. Toggled by `ENFORCE_IMAGE_MIN_SOLVE`. |
-| Distractor count | 0 easy / 1-2 medium / 2-3 hard | Easy is accessible first-attempt. Hard adds noise for suspicious users. |
+| Distractors | None | Removed from implementation — clean visual presentation prioritised for accessibility. |
 | Canvas rendering | Client-side from server line definitions | Not a static image file — forces bots to screenshot and parse the DOM. Prevents trivial download and OCR. |
 | Intersections never sent to client | Server-only storage | Core security property. `generate_challenge()` returns separate `client_data` and `server_data`. Only `client_data` is sent. Verify by checking that `ImageNewChallengeResponse` model has no intersection field. |
 | HMAC-SHA256 token binding | One-use, expiry-embedded | Prevents replay, tampering, and cross-challenge submission. Shared `captcha_token.py` module for both CAPTCHAs. |
 | All enforcement toggles env-configurable | `_env_bool()` pattern | Enables ablation testing for FYP evaluation — turn off individual security layers and measure impact. |
-| Bézier curves (quadratic + cubic) | Always available at medium/hard | Defeats Hough Transform (straight-line detector). BlindTest research shows VLMs struggle more with curves. |
+| Bezier curves (quadratic) | Always available alongside straight lines | Defeats Hough Transform (straight-line detector). BlindTest research shows VLMs struggle more with curves. Cubic Bezier generator exists but is not currently used in line type selection. |
 | Vectorised numpy intersection finding | Segment-segment cross-product method | Fast enough for real-time generation. Greedy clustering deduplicates within 3px. |
 | Dark canvas background | `#0a0f1d` | Matches line CAPTCHA style. High contrast with saturated line colours. |
 | Click markers | Yellow `#FACC15` with dark border `#1a1a2e` | Architecture doc spec. Visible on any line colour. |

@@ -4,7 +4,7 @@
 
 This document summarises the research foundation for the **Ephemeral Image CAPTCHA** — a standalone, accessible CAPTCHA alternative within a dual-CAPTCHA system. This CAPTCHA is designed for users who cannot complete the motor-control line-tracing CAPTCHA (e.g., users with tremors, mobility impairments, or those using assistive technology).
 
-The core challenge: **procedurally generated lines are displayed on a canvas, and the user clicks on the point(s) where the lines intersect.** The number of intersections ranges from 1–5 per challenge.
+The core challenge: **procedurally generated lines are displayed on a canvas, and the user clicks on the point(s) where the lines intersect.** The number of intersections ranges from 1–3 per challenge.
 
 This CAPTCHA is framed through **Moving Target Defense (MTD)** principles, meaning every challenge is procedurally generated per-session, has a short TTL, and is never reused.
 
@@ -119,22 +119,21 @@ The click-based design exploits both weaknesses simultaneously.
 This CAPTCHA implements all five MTD principles (Jajodia et al., 2011; Cîrjan, IEEE ICCAS 2025):
 
 ### Movement Strategy (M) — What Changes
-- Number of lines (2–5)
-- Line type (straight, curved, mixed)
+- Number of lines (2–3)
+- Line type (straight, quadratic Bezier)
 - Line colours, thickness, opacity
 - Canvas size and background
-- Number of intersections (1–5)
-- Presence/absence of distractor elements
-- Question phrasing variation ("Click where the lines cross" / "Tap each intersection point" / "Mark all crossing points")
+- Number of intersections (1–3)
+- Instruction phrasing variation (10 equivalent phrasings, randomly selected)
 
 ### Timing Function (T) — When It Changes
 - Every session gets a fresh challenge
-- TTL matches the line CAPTCHA TTL (PLACEHOLDER — update to match your line CAPTCHA's actual TTL)
+- TTL is 30 seconds (intentionally longer than line CAPTCHA's 10s — accessibility path needs more time)
 - Challenge expires server-side; expired tokens are rejected
 
 ### Configuration Set (C) — The Space of Possible Challenges
 Even conservatively:
-- 4 possible line counts × 3 line types × 10+ colour combos × 5 intersection counts × variable positions = **millions of unique configurations**
+- 2 possible line counts × 2 line types × 8 colours × 3 intersection counts × variable positions × 10 instruction variants = **thousands of discrete configurations, effectively infinite with continuous position randomisation**
 - No two sessions ever see the same challenge
 - No stable dataset for attackers to scrape or train on
 
@@ -178,7 +177,7 @@ Even conservatively:
 ### Principle 9: Keep It Accessible
 - **Source:** Spatial CAPTCHA (2025) — human dropoff between difficulty bins is only ~6.7pp with clean geometric primitives
 - **Target:** >90% human first-attempt solve rate, <8 seconds completion, clear instructions
-- **Design:** 2–4 clearly coloured lines on a clean background, generous click tolerance (~15px radius)
+- **Design:** 2–3 clearly coloured lines on a clean background, generous click tolerance (15px mouse, 22px touch)
 
 ---
 
