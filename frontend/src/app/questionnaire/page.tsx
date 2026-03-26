@@ -67,10 +67,10 @@ export default function QuestionnairePage() {
   const [comments, setComments] = useState("");
 
   useEffect(() => {
-    // Gate: must have completed both CAPTCHAs (3 passes each)
-    const linePasses = parseInt(sessionStorage.getItem("captcha_line_passes") || "0", 10);
-    const imagePasses = parseInt(sessionStorage.getItem("captcha_image_passes") || "0", 10);
-    if (linePasses < 3 || imagePasses < 3) {
+    // Gate: must have completed 5 attempts of each CAPTCHA type
+    const lineAttempts = parseInt(sessionStorage.getItem("captcha_line_attempts") || "0", 10);
+    const imageAttempts = parseInt(sessionStorage.getItem("captcha_image_attempts") || "0", 10);
+    if (lineAttempts < 5 || imageAttempts < 5) {
       router.replace("/");
       return;
     }

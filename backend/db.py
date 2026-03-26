@@ -4,7 +4,33 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
+
 from . import config
+
+
+# ─── Supabase backup (fire-and-forget) ────────────────────────────────────
+
+def _supabase_insert(table: str, row: Dict[str, Any]) -> None:
+    """POST a row to Supabase REST API. Silently skips if not configured."""
+    url = config.SUPABASE_URL
+    key = config.SUPABASE_SERVICE_KEY
+    if not url or not key:
+        return
+    try:
+        httpx.post(
+            f"{url}/rest/v1/{table}",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "apikey": key,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            json=row,
+            timeout=5.0,
+        )
+    except Exception as exc:
+        print(f"[supabase] {table} insert failed: {exc}")
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -359,6 +385,44 @@ def save_attempt(log: Dict[str, Any]) -> None:
         )
         conn.commit()
 
+    _supabase_insert("attempt_logs", {
+        "attempt_id": log["attempt_id"],
+        "session_id": log["session_id"],
+        "challenge_id": log["challenge_id"],
+        "pointer_type": log["pointer_type"],
+        "os_family": log.get("os_family"),
+        "browser_family": log.get("browser_family"),
+        "device_pixel_ratio": log.get("device_pixel_ratio"),
+        "path_seed": log["path_seed"],
+        "path_length_px": log["path_length_px"],
+        "tolerance_px": log["tolerance_px"],
+        "tolerance_jitter_px": log.get("tolerance_jitter_px"),
+        "ttl_ms": log["ttl_ms"],
+        "started_at": log["started_at"],
+        "ended_at": log["ended_at"],
+        "duration_ms": log["duration_ms"],
+        "outcome_reason": log["outcome_reason"],
+        "coverage_ratio": log["coverage_ratio"],
+        "coverage_len_ratio": log.get("coverage_len_ratio"),
+        "mean_speed": log.get("mean_speed"),
+        "max_speed": log.get("max_speed"),
+        "pause_count": log.get("pause_count"),
+        "pause_durations_json": json.dumps(log.get("pause_durations_ms") or []),
+        "deviation_stats_json": json.dumps(log.get("deviation_stats") or {}),
+        "speed_const_flag": 1 if log.get("speed_const_flag") else 0,
+        "accel_flag": 1 if log.get("accel_flag") else 0,
+        "behavioural_flag": 1 if log.get("behavioural_flag") else 0,
+        "speed_violation": 1 if log.get("speed_violation") else 0,
+        "too_perfect_flag": 1 if log.get("too_perfect_flag") else 0,
+        "bot_score": log.get("bot_score"),
+        "regularity_dt_cv": log.get("regularity_dt_cv"),
+        "regularity_dd_cv": log.get("regularity_dd_cv"),
+        "curvature_var_low": log.get("curvature_var_low"),
+        "curvature_var_high": log.get("curvature_var_high"),
+        "trajectory_json": json.dumps(log.get("trajectory") or []),
+        "created_at": time.time(),
+    })
+
 
 def mark_challenge_used(challenge_id: str) -> None:
     with _get_conn() as conn:
@@ -449,6 +513,16 @@ def save_feedback(
         )
         conn.commit()
 
+    _supabase_insert("feedback", {
+        "id": feedback_id,
+        "name": name,
+        "category": category,
+        "device": device,
+        "message": message,
+        "image_filenames_json": json.dumps(image_filenames),
+        "created_at": time.time(),
+    })
+
 
 def get_all_feedback() -> List[Dict[str, Any]]:
     with _get_conn() as conn:
@@ -484,6 +558,19 @@ def save_questionnaire_response(data: Dict[str, Any]) -> None:
         )
         conn.commit()
 
+    _supabase_insert("questionnaire_responses", {
+        "id": data["id"],
+        "session_id": data["session_id"],
+        "age_range": data["age_range"],
+        "captcha_frequency": data["captcha_frequency"],
+        "captcha1_difficulty": data["captcha1_difficulty"],
+        "captcha1_frustration": data["captcha1_frustration"],
+        "captcha2_difficulty": data["captcha2_difficulty"],
+        "captcha2_frustration": data["captcha2_frustration"],
+        "comments": data.get("comments"),
+        "created_at": time.time(),
+    })
+
 
 def save_image_attempt(log: Dict[str, Any]) -> None:
     with _get_conn() as conn:
@@ -517,3 +604,21 @@ def save_image_attempt(log: Dict[str, Any]) -> None:
             ),
         )
         conn.commit()
+
+    _supabase_insert("image_attempt_logs", {
+        "attempt_id": log["attempt_id"],
+        "challenge_id": log["challenge_id"],
+        "num_lines": log["num_lines"],
+        "num_intersections": log["num_intersections"],
+        "num_clicks": log["num_clicks"],
+        "matched": log["matched"],
+        "excess": log["excess"],
+        "passed": 1 if log["passed"] else 0,
+        "reason": log["reason"],
+        "solve_time_ms": log["solve_time_ms"],
+        "too_fast": 1 if log["too_fast"] else 0,
+        "clicks_json": json.dumps(log.get("clicks") or []),
+        "pointer_type": log.get("pointer_type"),
+        "tolerance_px": log.get("tolerance_px"),
+        "created_at": time.time(),
+    })

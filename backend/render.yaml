@@ -4,6 +4,10 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    disk:
+      name: captcha-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: ALLOWED_ORIGINS
         value: https://fyp-mu-nine.vercel.app

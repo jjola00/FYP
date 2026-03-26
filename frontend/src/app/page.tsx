@@ -27,21 +27,42 @@ import { FailureTutorial } from "@/components/failure-tutorial";
 const LINE_INSTRUCTION =
   "HOLD the blue dot and trace the line without lifting. The path appears as you go.";
 
-const FALLBACK_AFTER_FAILURES = 3;
-const REQUIRED_PASSES = 3;
+const CONSECUTIVE_FAILURE_NUDGE = 3;
+const REQUIRED_ATTEMPTS = 5;
 const AUTO_ADVANCE_DELAY_MS = 1800;
 
-function PassDots({ current, total }: { current: number; total: number }) {
+function AttemptDots({
+  attempts,
+  passes,
+  total,
+}: {
+  attempts: number;
+  passes: number;
+  total: number;
+}) {
+  // Show dots for completed attempts: green=pass, red=fail, grey=remaining
   return (
     <div className="flex items-center gap-1.5">
-      {Array.from({ length: total }, (_, i) => (
-        <div
-          key={i}
-          className={`h-2.5 w-2.5 rounded-full transition-all duration-500 ${
-            i < current ? "bg-green-500 scale-110" : "bg-muted-foreground/25"
-          }`}
-        />
-      ))}
+      {Array.from({ length: total }, (_, i) => {
+        let colorClass = "bg-muted-foreground/25"; // not yet attempted
+        if (i < attempts) {
+          // This attempt happened — but we only know total passes/attempts,
+          // not per-attempt results. Show filled dots for attempts done.
+          // We'll use a simpler approach: green for passes, red for fails, grey for remaining.
+          // Since we don't track order, show passes first then fails.
+          if (i < passes) {
+            colorClass = "bg-green-500 scale-110";
+          } else {
+            colorClass = "bg-red-400 scale-110";
+          }
+        }
+        return (
+          <div
+            key={i}
+            className={`h-2.5 w-2.5 rounded-full transition-all duration-500 ${colorClass}`}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -66,28 +87,33 @@ export default function CaptchaPage() {
   const [failureReason, setFailureReason] = useState("");
   const [failureCaptchaType, setFailureCaptchaType] = useState<"line" | "visual">("line");
 
-  // ── Type-complete interstitial (shown when a type hits 3/3) ─────
+  // ── Type-complete interstitial ──────────────────────────────────
   const [typeJustCompleted, setTypeJustCompleted] = useState<"line" | "visual" | null>(null);
 
-  // ── Study flow: track pass counts per CAPTCHA type ──────────────
+  // ── Study flow: track attempts AND passes per CAPTCHA type ──────
+  const [lineAttempts, setLineAttempts] = useState(0);
+  const [imageAttempts, setImageAttempts] = useState(0);
   const [linePasses, setLinePasses] = useState(0);
   const [imagePasses, setImagePasses] = useState(0);
 
-  const lineComplete = linePasses >= REQUIRED_PASSES;
-  const imageComplete = imagePasses >= REQUIRED_PASSES;
+  const lineComplete = lineAttempts >= REQUIRED_ATTEMPTS;
+  const imageComplete = imageAttempts >= REQUIRED_ATTEMPTS;
 
-  // ── Failure tracking (5.4) ────────────────────────────────────
-  const [lineFailures, setLineFailures] = useState(0);
-  const [imageFailures, setImageFailures] = useState(0);
+  // ── Consecutive failure tracking (for morale nudge) ─────────────
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
 
-  // ── Mid-attempt reset (5.2) ───────────────────────────────────
+  // ── Mid-attempt reset ───────────────────────────────────────────
   const [pendingTab, setPendingTab] = useState<"line" | "visual" | null>(null);
   const lineAttemptRef = useRef<() => boolean>(() => false);
   const imageAttemptRef = useRef<() => boolean>(() => false);
 
-  // Ref to track latest pass counts for use in timeouts
+  // Refs for use in timeouts
+  const lineAttemptsRef = useRef(lineAttempts);
+  const imageAttemptsRef = useRef(imageAttempts);
   const linePassesRef = useRef(linePasses);
   const imagePassesRef = useRef(imagePasses);
+  useEffect(() => { lineAttemptsRef.current = lineAttempts; }, [lineAttempts]);
+  useEffect(() => { imageAttemptsRef.current = imageAttempts; }, [imageAttempts]);
   useEffect(() => { linePassesRef.current = linePasses; }, [linePasses]);
   useEffect(() => { imagePassesRef.current = imagePasses; }, [imagePasses]);
 
@@ -98,17 +124,25 @@ export default function CaptchaPage() {
       router.replace("/info-sheet");
       return;
     }
-    const storedLine = parseInt(sessionStorage.getItem("captcha_line_passes") || "0", 10);
-    const storedImage = parseInt(sessionStorage.getItem("captcha_image_passes") || "0", 10);
-    if (storedLine >= REQUIRED_PASSES && storedImage >= REQUIRED_PASSES) {
+    const storedLineAttempts = parseInt(sessionStorage.getItem("captcha_line_attempts") || "0", 10);
+    const storedImageAttempts = parseInt(sessionStorage.getItem("captcha_image_attempts") || "0", 10);
+    const storedLinePasses = parseInt(sessionStorage.getItem("captcha_line_passes") || "0", 10);
+    const storedImagePasses = parseInt(sessionStorage.getItem("captcha_image_passes") || "0", 10);
+
+    if (storedLineAttempts >= REQUIRED_ATTEMPTS && storedImageAttempts >= REQUIRED_ATTEMPTS) {
       router.replace("/questionnaire");
       return;
     }
-    setLinePasses(storedLine);
-    setImagePasses(storedImage);
-    linePassesRef.current = storedLine;
-    imagePassesRef.current = storedImage;
-    const startTab = storedLine >= REQUIRED_PASSES ? "visual" : "line";
+    setLineAttempts(storedLineAttempts);
+    setImageAttempts(storedImageAttempts);
+    setLinePasses(storedLinePasses);
+    setImagePasses(storedImagePasses);
+    lineAttemptsRef.current = storedLineAttempts;
+    imageAttemptsRef.current = storedImageAttempts;
+    linePassesRef.current = storedLinePasses;
+    imagePassesRef.current = storedImagePasses;
+
+    const startTab = storedLineAttempts >= REQUIRED_ATTEMPTS ? "visual" : "line";
     setActiveTab(startTab);
     setReady(true);
   }, [router]);
@@ -152,11 +186,7 @@ export default function CaptchaPage() {
 
   const switchToTab = (tab: "line" | "visual") => {
     setActiveTab(tab);
-    if (tab === "line") {
-      setImageFailures(0);
-    } else {
-      setLineFailures(0);
-    }
+    setConsecutiveFailures(0);
     loadChallenge(tab);
     setPendingTab(null);
   };
@@ -178,8 +208,8 @@ export default function CaptchaPage() {
   };
 
   const handleContinueFromInterstitial = () => {
-    const lineDone = linePassesRef.current >= REQUIRED_PASSES;
-    const imageDone = imagePassesRef.current >= REQUIRED_PASSES;
+    const lineDone = lineAttemptsRef.current >= REQUIRED_ATTEMPTS;
+    const imageDone = imageAttemptsRef.current >= REQUIRED_ATTEMPTS;
     setTypeJustCompleted(null);
 
     if (lineDone && imageDone) {
@@ -191,48 +221,43 @@ export default function CaptchaPage() {
   };
 
   const handleChallengeComplete = useCallback((success: boolean, reason?: string) => {
+    const isLine = activeTab === "line";
+
+    // ── Always increment attempt count ──────────────────────────
+    const prevAttempts = isLine ? lineAttemptsRef.current : imageAttemptsRef.current;
+    const newAttempts = prevAttempts + 1;
+
+    if (isLine) {
+      setLineAttempts(newAttempts);
+      lineAttemptsRef.current = newAttempts;
+      sessionStorage.setItem("captcha_line_attempts", String(newAttempts));
+    } else {
+      setImageAttempts(newAttempts);
+      imageAttemptsRef.current = newAttempts;
+      sessionStorage.setItem("captcha_image_attempts", String(newAttempts));
+    }
+
+    // ── Track passes ────────────────────────────────────────────
     if (success) {
-      const isLine = activeTab === "line";
       const prevPasses = isLine ? linePassesRef.current : imagePassesRef.current;
-      const newCount = Math.min(prevPasses + 1, REQUIRED_PASSES);
+      const newPasses = prevPasses + 1;
 
       if (isLine) {
-        setLinePasses(newCount);
-        linePassesRef.current = newCount;
-        sessionStorage.setItem("captcha_line_passes", String(newCount));
-        if (newCount >= REQUIRED_PASSES) {
-          sessionStorage.setItem("captcha_line_complete", "true");
-        }
+        setLinePasses(newPasses);
+        linePassesRef.current = newPasses;
+        sessionStorage.setItem("captcha_line_passes", String(newPasses));
       } else {
-        setImagePasses(newCount);
-        imagePassesRef.current = newCount;
-        sessionStorage.setItem("captcha_image_passes", String(newCount));
-        if (newCount >= REQUIRED_PASSES) {
-          sessionStorage.setItem("captcha_image_complete", "true");
-        }
+        setImagePasses(newPasses);
+        imagePassesRef.current = newPasses;
+        sessionStorage.setItem("captcha_image_passes", String(newPasses));
       }
 
-      // Fire confetti
       fireConfetti();
+      setConsecutiveFailures(0);
 
       window.dispatchEvent(
         new CustomEvent("captcha-verified", { detail: { type: activeTab } })
       );
-      setLineFailures(0);
-      setImageFailures(0);
-
-      // Check if this type just hit 3/3 — show interstitial
-      const justCompleted = newCount >= REQUIRED_PASSES;
-      if (justCompleted) {
-        setTimeout(() => {
-          setTypeJustCompleted(isLine ? "line" : "visual");
-        }, AUTO_ADVANCE_DELAY_MS);
-      } else {
-        // Still more passes needed — auto-load next challenge
-        setTimeout(() => {
-          loadChallenge(activeTab);
-        }, AUTO_ADVANCE_DELAY_MS);
-      }
     } else {
       // Show failure tutorial popup
       if (reason && reason !== "error") {
@@ -240,12 +265,24 @@ export default function CaptchaPage() {
         setFailureCaptchaType(activeTab);
         setFailureTutorialOpen(true);
       }
+      setConsecutiveFailures((prev) => prev + 1);
+    }
 
-      if (activeTab === "line") {
-        setLineFailures((prev) => prev + 1);
+    // ── Check if this type just hit 5 attempts → show interstitial ──
+    if (newAttempts >= REQUIRED_ATTEMPTS) {
+      if (isLine) {
+        sessionStorage.setItem("captcha_line_complete", "true");
       } else {
-        setImageFailures((prev) => prev + 1);
+        sessionStorage.setItem("captcha_image_complete", "true");
       }
+      setTimeout(() => {
+        setTypeJustCompleted(isLine ? "line" : "visual");
+      }, AUTO_ADVANCE_DELAY_MS);
+    } else {
+      // More attempts needed — auto-load next challenge
+      setTimeout(() => {
+        loadChallenge(activeTab);
+      }, AUTO_ADVANCE_DELAY_MS);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, router]);
@@ -258,15 +295,13 @@ export default function CaptchaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  // Derive nudge messages
-  const showLineNudge = lineFailures >= FALLBACK_AFTER_FAILURES;
-  const showImageNudge = imageFailures >= FALLBACK_AFTER_FAILURES;
-  const showNudge =
-    (activeTab === "line" && showLineNudge) ||
-    (activeTab === "visual" && showImageNudge);
-  const nudgeTarget = activeTab === "line" ? "visual" : "line";
-  const nudgeLabel =
-    nudgeTarget === "line" ? "Trace the Path" : "Spot the Crossings";
+  // Current attempt number for display
+  const currentAttempt = activeTab === "line"
+    ? Math.min(lineAttempts + 1, REQUIRED_ATTEMPTS)
+    : Math.min(imageAttempts + 1, REQUIRED_ATTEMPTS);
+
+  // Nudge only for morale after 3 consecutive failures (doesn't force switch)
+  const showNudge = consecutiveFailures >= CONSECUTIVE_FAILURE_NUDGE;
 
   if (!ready) return null;
 
@@ -274,7 +309,10 @@ export default function CaptchaPage() {
   if (typeJustCompleted) {
     const completedLabel =
       typeJustCompleted === "line" ? "Trace the Path" : "Spot the Crossings";
-    const bothDone = linePassesRef.current >= REQUIRED_PASSES && imagePassesRef.current >= REQUIRED_PASSES;
+    const completedPasses = typeJustCompleted === "line" ? linePasses : imagePasses;
+    const bothDone =
+      lineAttemptsRef.current >= REQUIRED_ATTEMPTS &&
+      imageAttemptsRef.current >= REQUIRED_ATTEMPTS;
     const otherLabel =
       typeJustCompleted === "line" ? "Spot the Crossings" : "Trace the Path";
 
@@ -309,23 +347,30 @@ export default function CaptchaPage() {
               <p className="text-lg font-semibold text-green-500" role="status" aria-live="assertive">
                 {completedLabel} Complete!
               </p>
+              <p className="text-2xl font-bold text-foreground">
+                You scored {completedPasses}/{REQUIRED_ATTEMPTS}
+              </p>
               <p className="text-sm text-muted-foreground">
-                You passed all {REQUIRED_PASSES} attempts.
+                {completedPasses === REQUIRED_ATTEMPTS
+                  ? "Perfect score!"
+                  : completedPasses >= 3
+                    ? "Great job!"
+                    : "Thanks for completing all attempts."}
               </p>
 
               {/* Progress for both types */}
-              <div className="flex flex-col gap-2 w-full max-w-[220px]">
+              <div className="flex flex-col gap-2 w-full max-w-[240px]">
                 <div className="flex items-center justify-between gap-3">
                   <span className={`text-xs ${lineComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
                     Trace the Path
                   </span>
-                  <PassDots current={linePasses} total={REQUIRED_PASSES} />
+                  <AttemptDots attempts={lineAttempts} passes={linePasses} total={REQUIRED_ATTEMPTS} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className={`text-xs ${imageComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
                     Spot the Crossings
                   </span>
-                  <PassDots current={imagePasses} total={REQUIRED_PASSES} />
+                  <AttemptDots attempts={imageAttempts} passes={imagePasses} total={REQUIRED_ATTEMPTS} />
                 </div>
               </div>
 
@@ -353,7 +398,7 @@ export default function CaptchaPage() {
             Beyond Recognition
           </CardTitle>
           <p className="text-center text-sm text-muted-foreground">
-            Verify you&apos;re human — complete both challenges
+            Complete both challenges — {REQUIRED_ATTEMPTS} attempts each
           </p>
 
           {/* Progress for both types */}
@@ -362,13 +407,13 @@ export default function CaptchaPage() {
               <span className={`text-xs w-28 text-right ${lineComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
                 {lineComplete ? "\u2713 " : ""}Trace the Path
               </span>
-              <PassDots current={linePasses} total={REQUIRED_PASSES} />
+              <AttemptDots attempts={lineAttempts} passes={linePasses} total={REQUIRED_ATTEMPTS} />
             </div>
             <div className="flex items-center gap-3">
               <span className={`text-xs w-28 text-right ${imageComplete ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
                 {imageComplete ? "\u2713 " : ""}Spot the Crossings
               </span>
-              <PassDots current={imagePasses} total={REQUIRED_PASSES} />
+              <AttemptDots attempts={imageAttempts} passes={imagePasses} total={REQUIRED_ATTEMPTS} />
             </div>
           </div>
         </CardHeader>
@@ -389,7 +434,12 @@ export default function CaptchaPage() {
             </TabsList>
           </Tabs>
 
-          {/* Mid-attempt switch warning (5.2) */}
+          {/* Attempt counter */}
+          <p className="mt-3 text-center text-sm font-medium text-muted-foreground">
+            Attempt {currentAttempt} of {REQUIRED_ATTEMPTS}
+          </p>
+
+          {/* Mid-attempt switch warning */}
           {pendingTab && (
             <div className="mt-3 flex items-center justify-between rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm">
               <span className="text-yellow-600 dark:text-yellow-400">
@@ -476,16 +526,10 @@ export default function CaptchaPage() {
               </div>
             </div>
 
-            {/* Cross-type nudge (5.4) */}
+            {/* Morale nudge after 3 consecutive failures */}
             {showNudge && (
-              <p className="text-sm text-muted-foreground">
-                Having trouble?{" "}
-                <button
-                  className="text-primary underline hover:text-primary/80"
-                  onClick={() => switchToTab(nudgeTarget)}
-                >
-                  Try {nudgeLabel} instead.
-                </button>
+              <p className="text-sm text-muted-foreground text-center">
+                Keep going — you&apos;re doing great! Each attempt helps the research.
               </p>
             )}
           </div>

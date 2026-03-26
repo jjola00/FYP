@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -79,8 +80,8 @@ FINISH_REVEAL_PX = 40
 
 FALLBACK_AFTER_FAILURES = 3
 
-# Storage
-DATA_DIR = Path("data")
+# Storage — use Render persistent disk mount if available, else local data/
+DATA_DIR = Path("/data") if os.getenv("RENDER") else Path("data")
 DB_PATH = DATA_DIR / "captcha.db"
 
 # Security
@@ -183,3 +184,7 @@ IMAGE_INTERSECTION_CLUSTER_RADIUS_PX = float(os.getenv("IMAGE_INTERSECTION_CLUST
 
 # Generation retry budget
 IMAGE_MAX_GENERATION_RETRIES = int(os.getenv("IMAGE_MAX_GENERATION_RETRIES", "50"))
+
+# ─── Supabase backup (optional cloud mirror of SQLite data) ──────
+SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY: Optional[str] = os.getenv("SUPABASE_SERVICE_KEY")
