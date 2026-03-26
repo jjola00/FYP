@@ -80,8 +80,8 @@ FINISH_REVEAL_PX = 40
 
 FALLBACK_AFTER_FAILURES = 3
 
-# Storage — use Render persistent disk mount if available, else local data/
-DATA_DIR = Path("/data") if os.getenv("RENDER") else Path("data")
+# Storage
+DATA_DIR = Path("data")
 DB_PATH = DATA_DIR / "captcha.db"
 
 # Security
