@@ -77,6 +77,7 @@ export function CaptchaCanvas({
         drawingRef.current = false;
         setNeedsReset(true);
         onStatusChange("Too slow.", "error");
+        onChallengeComplete(false, "timeout");
         clearInterval(handle);
       }
     }, 200);

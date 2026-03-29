@@ -167,7 +167,7 @@ const LINE_STEPS: PopupStep[] = [
   {
     title: "Challenges Are Timed",
     description:
-      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge — plenty of time if you start promptly.",
+      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge",
   },
 ];
 
@@ -181,7 +181,7 @@ const IMAGE_STEPS: PopupStep[] = [
   {
     title: "Challenges Are Timed",
     description:
-      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge — plenty of time to find and click all intersections.",
+      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge.",
   },
 ];
 

@@ -58,6 +58,7 @@ export function ImageCaptchaCanvas({
       if (remaining <= 0) {
         setExpired(true);
         onStatusChange("Time's up.", "error");
+        onChallengeComplete(false, "timeout");
         clearInterval(handle);
       }
     }, 200);
