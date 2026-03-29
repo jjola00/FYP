@@ -13,6 +13,7 @@ import {
 
 interface TutorialOverlayProps {
   type: "line" | "visual";
+  onComplete?: () => void;
 }
 
 const STORAGE_KEYS = {
@@ -152,22 +153,36 @@ interface PopupStep {
   content?: React.ComponentType;
 }
 
+function TimerHint() {
+  return (
+    <svg
+      viewBox="0 0 180 50"
+      className="mx-auto w-full max-w-[180px]"
+      aria-hidden="true"
+    >
+      <rect width="180" height="50" rx="6" fill="#0a0f1d" />
+      <text x="120" y="20" textAnchor="end" fill="rgba(255,255,255,0.6)" fontSize="12" fontFamily="sans-serif">
+        Status
+      </text>
+      <text x="120" y="38" textAnchor="end" fill="rgba(168,85,247,1)" fontSize="13" fontFamily="monospace" fontWeight="500">
+        Time: 13s
+      </text>
+    </svg>
+  );
+}
+
 const LINE_STEPS: PopupStep[] = [
   {
     title: "Trace the Path",
     description:
-      "Press and hold the blue dot, then drag along the dashed line without lifting. The path reveals itself as you go.",
+      "Press and hold the blue dot, then drag along the dashed line without lifting. The path reveals itself as you go. Trace naturally, you don't need to be super accurate. Just relax and move at a comfortable pace.",
     content: LineTutorial,
-  },
-  {
-    title: "Take Your Time",
-    description:
-      "Trace naturally — like you're following a line with your finger. You don't need to be super accurate. Just relax and move at a comfortable pace.",
   },
   {
     title: "Challenges Are Timed",
     description:
-      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge",
+      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds to complete each attempt.",
+    content: TimerHint,
   },
 ];
 
@@ -181,7 +196,8 @@ const IMAGE_STEPS: PopupStep[] = [
   {
     title: "Challenges Are Timed",
     description:
-      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge.",
+      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds to complete each attempt.",
+    content: TimerHint,
   },
 ];
 
@@ -192,7 +208,7 @@ const STEPS_BY_TYPE = {
 
 // ── Component ────────────────────────────────────────────────────
 
-export function TutorialOverlay({ type }: TutorialOverlayProps) {
+export function TutorialOverlay({ type, onComplete }: TutorialOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [open, setOpen] = useState(false);
 
@@ -204,8 +220,11 @@ export function TutorialOverlay({ type }: TutorialOverlayProps) {
     if (!localStorage.getItem(key)) {
       setStepIndex(0);
       setOpen(true);
+    } else {
+      // Already seen — fire onComplete immediately
+      onComplete?.();
     }
-  }, [type]);
+  }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNext = () => {
     if (stepIndex < steps.length - 1) {
@@ -214,6 +233,7 @@ export function TutorialOverlay({ type }: TutorialOverlayProps) {
       // Final step — mark as seen and close
       localStorage.setItem(STORAGE_KEYS[type], "1");
       setOpen(false);
+      onComplete?.();
     }
   };
 

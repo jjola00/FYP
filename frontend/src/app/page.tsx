@@ -185,8 +185,9 @@ export default function CaptchaPage() {
   const switchToTab = (tab: "line" | "visual") => {
     setActiveTab(tab);
     setConsecutiveFailures(0);
-    loadChallenge(tab);
     setPendingTab(null);
+    // Challenge will be loaded by TutorialOverlay.onComplete
+    // (fires immediately if tutorial was already seen)
   };
 
   const handleTabChange = (value: string) => {
@@ -281,8 +282,9 @@ export default function CaptchaPage() {
       setTimeout(() => {
         setTypeJustCompleted(isLine ? "line" : "visual");
       }, AUTO_ADVANCE_DELAY_MS);
-    } else {
-      // More attempts needed — auto-load next challenge
+    } else if (success) {
+      // More attempts needed — auto-load next challenge (success only;
+      // failures load on popup dismiss to avoid double-load)
       setTimeout(() => {
         loadChallenge(activeTab);
       }, AUTO_ADVANCE_DELAY_MS);
@@ -290,13 +292,11 @@ export default function CaptchaPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, router]);
 
-  // Load initial challenge once ready
-  useEffect(() => {
-    if (ready) {
-      loadChallenge(activeTab);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
+  // Challenge is loaded when tutorial overlay completes (or was already seen)
+  const handleTutorialComplete = useCallback(() => {
+    loadChallenge(activeTab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Current attempt number for display
   const currentAttempt = activeTab === "line"
@@ -421,7 +421,7 @@ export default function CaptchaPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <TutorialOverlay type={activeTab} />
+          <TutorialOverlay type={activeTab} onComplete={handleTutorialComplete} />
           <Tabs
             value={activeTab}
             className="w-full"

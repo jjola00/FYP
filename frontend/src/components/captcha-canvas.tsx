@@ -55,19 +55,20 @@ export function CaptchaCanvas({
   const [solved, setSolved] = useState(false);
   const [needsReset, setNeedsReset] = useState(false);
   const [expired, setExpired] = useState(false);
+  const completedRef = useRef(false);  // guard: only call onChallengeComplete once per challenge
   const timerHandleRef = useRef<NodeJS.Timeout | null>(null);
   const dpr = useRef((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1);
 
-  // Timer effect
+  // Timer effect — use challengeId as key so it resets cleanly on new challenge
+  const challengeId = challenge?.challengeId;
   useEffect(() => {
     if (!challenge) return;
 
-    const handle = setInterval(() => {
-      if (solved || needsReset) {
-        clearInterval(handle);
-        return;
-      }
+    // Immediately show the timer on first tick
+    const remaining0 = Math.max(0, challenge.expiresAt * 1000 - Date.now());
+    if (remaining0 > 0) onTimerChange(`${Math.ceil(remaining0 / 1000)}s`);
 
+    const handle = setInterval(() => {
       const now = Date.now();
       const remaining = Math.max(0, challenge.expiresAt * 1000 - now);
       onTimerChange(remaining ? `${Math.ceil(remaining / 1000)}s` : "");
@@ -77,7 +78,7 @@ export function CaptchaCanvas({
         drawingRef.current = false;
         setNeedsReset(true);
         onStatusChange("Too slow.", "error");
-        onChallengeComplete(false, "timeout");
+        if (!completedRef.current) { completedRef.current = true; onChallengeComplete(false, "timeout"); }
         clearInterval(handle);
       }
     }, 200);
@@ -87,7 +88,8 @@ export function CaptchaCanvas({
     return () => {
       clearInterval(handle);
     };
-  }, [challenge, solved, needsReset]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challengeId]);
 
   // Reset when challenge changes
   useEffect(() => {
@@ -107,10 +109,8 @@ export function CaptchaCanvas({
       setSolved(false);
       setNeedsReset(false);
       setExpired(false);
-      onTimerChange("");
-      if (timerHandleRef.current) {
-        clearInterval(timerHandleRef.current);
-      }
+      completedRef.current = false;
+      // Timer is managed by its own useEffect — don't clear it here
       // Prime lookahead at start point
       fetchLookahead(challenge, challenge.startPoint[0], challenge.startPoint[1])
         .then(data => {
@@ -342,10 +342,10 @@ export function CaptchaCanvas({
     if (!challenge || trajectory.length < 2) return;
 
     if (trajectory.length < captchaConfig.minSamples) {
-      onStatusChange("Captcha incompleted.", "error");
+      onStatusChange("Not enough movement recorded.", "error");
       setNeedsReset(true);
       if (timerHandleRef.current) clearInterval(timerHandleRef.current);
-      onTimerChange("");
+      if (!completedRef.current) { completedRef.current = true; onChallengeComplete(false, "insufficient_samples"); }
       return;
     }
 
@@ -371,7 +371,7 @@ export function CaptchaCanvas({
         if (timerHandleRef.current) clearInterval(timerHandleRef.current);
         onTimerChange("");
         onStatusChange("Passed.", "success");
-        onChallengeComplete(true);
+        if (!completedRef.current) { completedRef.current = true; onChallengeComplete(true); }
       } else {
         if (data.reason === "timeout") {
           setExpired(true);
@@ -382,13 +382,12 @@ export function CaptchaCanvas({
           onStatusChange(formatFailureReason(data.reason), "error");
           setNeedsReset(true);
           if (timerHandleRef.current) clearInterval(timerHandleRef.current);
-          onTimerChange("");
         }
-        onChallengeComplete(false, data.reason);
+        if (!completedRef.current) { completedRef.current = true; onChallengeComplete(false, data.reason); }
       }
     } catch {
       onStatusChange("Verification error.", "error");
-      onChallengeComplete(false, "error");
+      if (!completedRef.current) { completedRef.current = true; onChallengeComplete(false, "error"); }
     }
   }, [challenge, onStatusChange, onTimerChange, onChallengeComplete]);
 
@@ -502,9 +501,8 @@ export function CaptchaCanvas({
       drawingRef.current = false;
       setNeedsReset(true);
       if (timerHandleRef.current) clearInterval(timerHandleRef.current);
-      onTimerChange("");
       onStatusChange("Strayed too far.", "error");
-      onChallengeComplete(false, "low_coverage");
+      if (!completedRef.current) { completedRef.current = true; onChallengeComplete(false, "low_coverage"); }
     }
   }, [onTimerChange, onStatusChange, onChallengeComplete]);
 
