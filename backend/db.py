@@ -120,6 +120,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS questionnaire_responses (
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
+                device_type TEXT,
                 age_range TEXT NOT NULL,
                 captcha_frequency INTEGER NOT NULL,
                 captcha1_difficulty INTEGER NOT NULL,
@@ -132,6 +133,13 @@ def init_db() -> None:
             """
         )
         conn.commit()
+
+        # Migration: add device_type column to questionnaire_responses
+        try:
+            conn.execute("ALTER TABLE questionnaire_responses ADD COLUMN device_type TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
         # ── Line CAPTCHA challenges ──────────────────────────────
         conn.execute(
@@ -537,15 +545,16 @@ def save_questionnaire_response(data: Dict[str, Any]) -> None:
         conn.execute(
             """
             INSERT INTO questionnaire_responses (
-                id, session_id, age_range, captcha_frequency,
+                id, session_id, device_type, age_range, captcha_frequency,
                 captcha1_difficulty, captcha1_frustration,
                 captcha2_difficulty, captcha2_frustration,
                 comments, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["id"],
                 data["session_id"],
+                data.get("device_type"),
                 data["age_range"],
                 data["captcha_frequency"],
                 data["captcha1_difficulty"],
@@ -561,6 +570,7 @@ def save_questionnaire_response(data: Dict[str, Any]) -> None:
     _supabase_insert("questionnaire_responses", {
         "id": data["id"],
         "session_id": data["session_id"],
+        "device_type": data.get("device_type"),
         "age_range": data["age_range"],
         "captcha_frequency": data["captcha_frequency"],
         "captcha1_difficulty": data["captcha1_difficulty"],

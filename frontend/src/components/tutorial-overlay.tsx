@@ -86,21 +86,11 @@ function LineTutorial() {
 }
 
 function ImageTutorial() {
-  // Three lines creating two intersections:
-  // Line A (pink):  (20,155) → (240,35)
-  // Line B (blue):  (20,50)  → (150,145)
-  // Line C (green): (140,25) → (240,155)
-  // Intersection 1 (A∩B) ≈ (104, 102)
-  // Intersection 2 (A∩C) ≈ (176, 69)
-
   const ix1 = { x: 104, y: 102 };
   const ix2 = { x: 176, y: 69 };
 
-  // Cursor path: start off-canvas bottom-left, move to ix1, then ix2
   const cursorPath = `M40,160 L${ix1.x},${ix1.y} L${ix2.x},${ix2.y}`;
 
-  // 4s loop: move→pause(click1)→move→pause(click2)→brief reset
-  // keyPoints 0=start, 0.5=ix1, 1.0=ix2
   const keyPoints = "0;0.5;0.5;1;1";
   const keyTimes = "0;0.22;0.42;0.68;1";
   const dur = "4s";
@@ -119,29 +109,27 @@ function ImageTutorial() {
       <line x1="20" y1="50" x2="150" y2="145" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />
       <line x1="140" y1="25" x2="240" y2="155" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
 
-      {/* Click effect at intersection 1 — ripple ring */}
+      {/* Click effect at intersection 1 */}
       <circle cx={ix1.x} cy={ix1.y} r="6" fill="none" stroke="rgba(250,204,21,0.7)" strokeWidth="2">
         <animate attributeName="r" values="4;4;4;6;18;18;18;18;18;18" dur={dur} repeatCount="indefinite" />
         <animate attributeName="opacity" values="0;0;0;0.8;0;0;0;0;0;0" dur={dur} repeatCount="indefinite" />
       </circle>
-      {/* Click dot that stays */}
       <circle cx={ix1.x} cy={ix1.y} r="0" fill="#FACC15">
         <animate attributeName="r" values="0;0;0;6;6;6;6;6;6;0" dur={dur} repeatCount="indefinite" />
         <animate attributeName="opacity" values="0;0;0;0.9;0.9;0.9;0.9;0.9;0.9;0" dur={dur} repeatCount="indefinite" />
       </circle>
 
-      {/* Click effect at intersection 2 — ripple ring */}
+      {/* Click effect at intersection 2 */}
       <circle cx={ix2.x} cy={ix2.y} r="6" fill="none" stroke="rgba(250,204,21,0.7)" strokeWidth="2">
         <animate attributeName="r" values="4;4;4;4;4;4;4;6;18;18" dur={dur} repeatCount="indefinite" />
         <animate attributeName="opacity" values="0;0;0;0;0;0;0;0.8;0;0" dur={dur} repeatCount="indefinite" />
       </circle>
-      {/* Click dot that stays */}
       <circle cx={ix2.x} cy={ix2.y} r="0" fill="#FACC15">
         <animate attributeName="r" values="0;0;0;0;0;0;0;6;6;0" dur={dur} repeatCount="indefinite" />
         <animate attributeName="opacity" values="0;0;0;0;0;0;0;0.9;0.9;0" dur={dur} repeatCount="indefinite" />
       </circle>
 
-      {/* Animated cursor that moves to each intersection and pauses */}
+      {/* Animated cursor */}
       <circle r="6" fill="#FACC15" opacity="0.9">
         <animateMotion
           path={cursorPath}
@@ -156,52 +144,98 @@ function ImageTutorial() {
   );
 }
 
-const TUTORIALS = {
-  line: {
+// ── Popup step definitions per CAPTCHA type ──────────────────────
+
+interface PopupStep {
+  title: string;
+  description: string;
+  content?: React.ComponentType;
+}
+
+const LINE_STEPS: PopupStep[] = [
+  {
     title: "Trace the Path",
     description:
       "Press and hold the blue dot, then drag along the dashed line without lifting. The path reveals itself as you go.",
-    Tutorial: LineTutorial,
+    content: LineTutorial,
   },
-  visual: {
+  {
+    title: "Take Your Time",
+    description:
+      "Trace naturally — like you're following a line with your finger. You don't need to be super accurate. Just relax and move at a comfortable pace.",
+  },
+  {
+    title: "Challenges Are Timed",
+    description:
+      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge — plenty of time if you start promptly.",
+  },
+];
+
+const IMAGE_STEPS: PopupStep[] = [
+  {
     title: "Spot the Crossings",
     description:
       "Tap or click where the coloured lines cross each other. Find all intersections, then hit Submit.",
-    Tutorial: ImageTutorial,
+    content: ImageTutorial,
   },
+  {
+    title: "Challenges Are Timed",
+    description:
+      "Each challenge has a countdown timer shown in the bottom-right corner. You have 20 seconds for this challenge — plenty of time to find and click all intersections.",
+  },
+];
+
+const STEPS_BY_TYPE = {
+  line: LINE_STEPS,
+  visual: IMAGE_STEPS,
 } as const;
 
+// ── Component ────────────────────────────────────────────────────
+
 export function TutorialOverlay({ type }: TutorialOverlayProps) {
+  const [stepIndex, setStepIndex] = useState(0);
   const [open, setOpen] = useState(false);
+
+  const steps = STEPS_BY_TYPE[type];
 
   useEffect(() => {
     const key = STORAGE_KEYS[type];
     if (typeof window === "undefined") return;
     if (!localStorage.getItem(key)) {
+      setStepIndex(0);
       setOpen(true);
     }
   }, [type]);
 
-  const handleDismiss = () => {
-    localStorage.setItem(STORAGE_KEYS[type], "1");
-    setOpen(false);
+  const handleNext = () => {
+    if (stepIndex < steps.length - 1) {
+      setStepIndex((prev) => prev + 1);
+    } else {
+      // Final step — mark as seen and close
+      localStorage.setItem(STORAGE_KEYS[type], "1");
+      setOpen(false);
+    }
   };
 
-  const { title, description, Tutorial } = TUTORIALS[type];
+  const step = steps[stepIndex];
+  const isLast = stepIndex === steps.length - 1;
+  const Content = step?.content;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && handleDismiss()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleNext(); }}>
       <DialogContent className="max-w-xs sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogTitle>{step?.title}</DialogTitle>
+          <DialogDescription>{step?.description}</DialogDescription>
         </DialogHeader>
-        <div className="py-2">
-          <Tutorial />
-        </div>
+        {Content && (
+          <div className="py-2">
+            <Content />
+          </div>
+        )}
         <DialogFooter>
-          <Button onClick={handleDismiss} className="w-full">
-            Got it
+          <Button onClick={handleNext} className="w-full">
+            {isLast ? "Got it" : "Next"}
           </Button>
         </DialogFooter>
       </DialogContent>

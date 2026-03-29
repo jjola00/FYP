@@ -24,7 +24,7 @@ MAX_GENTLE_BENDS = 2
 
 # Timing
 TARGET_COMPLETION_TIME_MS = 3000
-CHALLENGE_TTL_MS = 10_000  # give humans more slack; bots are constrained by other checks
+CHALLENGE_TTL_MS = 20_000  # give humans more slack; bots are constrained by other checks
 TOO_FAST_THRESHOLD_MS = 1_000
 TRAIL_VISIBLE_MS = 700
 TRAIL_FADEOUT_MS = 900
@@ -174,7 +174,7 @@ IMAGE_CLICK_TOLERANCE_TOUCH_PX = int(os.getenv("IMAGE_CLICK_TOLERANCE_TOUCH_PX",
 IMAGE_CLICK_TOLERANCE_PX = IMAGE_CLICK_TOLERANCE_MOUSE_PX  # backwards compat alias
 
 # Timing — TTL is configurable; TODO: match line CAPTCHA once confirmed
-IMAGE_CHALLENGE_TTL_MS = int(os.getenv("IMAGE_CAPTCHA_TTL_MS", "30000"))
+IMAGE_CHALLENGE_TTL_MS = int(os.getenv("IMAGE_CAPTCHA_TTL_MS", "20000"))
 IMAGE_MIN_SOLVE_TIME_MS = int(os.getenv("IMAGE_MIN_SOLVE_MS", "800"))  # below this is bot-like
 ENFORCE_IMAGE_MIN_SOLVE = _env_bool("ENFORCE_IMAGE_MIN_SOLVE", True)
 

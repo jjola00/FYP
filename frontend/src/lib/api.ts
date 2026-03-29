@@ -227,6 +227,7 @@ export async function verifyImageAttempt(
 
 export interface QuestionnaireData {
   sessionId: string;
+  deviceType: string;
   ageRange: string;
   captchaFrequency: number;
   captcha1Difficulty: number;

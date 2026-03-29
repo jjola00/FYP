@@ -58,6 +58,7 @@ export default function QuestionnairePage() {
   const [error, setError] = useState("");
 
   // Form state
+  const [deviceType, setDeviceType] = useState<string | null>(null);
   const [ageRange, setAgeRange] = useState<string | null>(null);
   const [captchaFrequency, setCaptchaFrequency] = useState<number | null>(null);
   const [captcha1Difficulty, setCaptcha1Difficulty] = useState<number | null>(null);
@@ -77,6 +78,7 @@ export default function QuestionnairePage() {
   }, [router]);
 
   const isValid =
+    deviceType !== null &&
     ageRange !== null &&
     captchaFrequency !== null &&
     captcha1Difficulty !== null &&
@@ -92,6 +94,7 @@ export default function QuestionnairePage() {
     try {
       await submitQuestionnaire({
         sessionId: getSessionId(),
+        deviceType: deviceType!,
         ageRange: ageRange!,
         captchaFrequency: captchaFrequency!,
         captcha1Difficulty: captcha1Difficulty!,
@@ -130,7 +133,31 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                1. What is your age range?
+                1. What device are you using right now?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {["Computer", "Phone", "Tablet"].map((device) => (
+                  <label
+                    key={device}
+                    className="flex items-center gap-2 cursor-pointer rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted/50"
+                  >
+                    <input
+                      type="radio"
+                      name="deviceType"
+                      value={device}
+                      checked={deviceType === device}
+                      onChange={() => setDeviceType(device)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span>{device}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-medium text-foreground">
+                2. What is your age range?
               </p>
               <div className="flex flex-wrap gap-2">
                 {AGE_RANGES.map((range) => (
@@ -154,7 +181,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                2. How often do you encounter CAPTCHAs online?
+                3. How often do you encounter CAPTCHAs online?
               </p>
               <LikertScale
                 name="captchaFrequency"
@@ -174,7 +201,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                3. How difficult was CAPTCHA 1 (Trace the Path)?
+                4. How difficult was CAPTCHA 1 (Trace the Path)?
               </p>
               <LikertScale
                 name="captcha1Difficulty"
@@ -187,7 +214,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                4. How frustrating was CAPTCHA 1 (Trace the Path)?
+                5. How frustrating was CAPTCHA 1 (Trace the Path)?
               </p>
               <LikertScale
                 name="captcha1Frustration"
@@ -200,7 +227,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                5. How difficult was CAPTCHA 2 (Spot the Crossings)?
+                6. How difficult was CAPTCHA 2 (Spot the Crossings)?
               </p>
               <LikertScale
                 name="captcha2Difficulty"
@@ -213,7 +240,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                6. How frustrating was CAPTCHA 2 (Spot the Crossings)?
+                7. How frustrating was CAPTCHA 2 (Spot the Crossings)?
               </p>
               <LikertScale
                 name="captcha2Frustration"
@@ -226,7 +253,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                7. Any additional comments? (optional)
+                8. Any additional comments? (optional)
               </p>
               <textarea
                 value={comments}

@@ -182,8 +182,6 @@ export default function CaptchaPage() {
     }
   };
 
-  const handleNewChallenge = () => loadChallenge(activeTab);
-
   const switchToTab = (tab: "line" | "visual") => {
     setActiveTab(tab);
     setConsecutiveFailures(0);
@@ -259,11 +257,16 @@ export default function CaptchaPage() {
         new CustomEvent("captcha-verified", { detail: { type: activeTab } })
       );
     } else {
-      // Show failure tutorial popup
+      // Show failure tutorial popup — next challenge loads on dismiss
       if (reason && reason !== "error") {
         setFailureReason(reason);
         setFailureCaptchaType(activeTab);
         setFailureTutorialOpen(true);
+      } else {
+        // No popup (network error etc) — auto-load after delay
+        if (newAttempts < REQUIRED_ATTEMPTS) {
+          setTimeout(() => { loadChallenge(activeTab); }, AUTO_ADVANCE_DELAY_MS);
+        }
       }
       setConsecutiveFailures((prev) => prev + 1);
     }
@@ -496,14 +499,7 @@ export default function CaptchaPage() {
               {instruction}
             </p>
 
-            <div className="flex w-full items-center justify-between gap-4 border-t border-border pt-4">
-              <Button
-                variant="outline"
-                onClick={handleNewChallenge}
-                disabled={isLoading}
-              >
-                {isLoading ? "Loading..." : "New Challenge"}
-              </Button>
+            <div className="flex w-full items-center justify-end gap-4 border-t border-border pt-4">
               <div className="flex flex-col items-end">
                 <p
                   className={`text-sm font-medium ${
@@ -538,7 +534,16 @@ export default function CaptchaPage() {
       <FeedbackWidget />
       <FailureTutorial
         open={failureTutorialOpen}
-        onDismiss={() => setFailureTutorialOpen(false)}
+        onDismiss={() => {
+          setFailureTutorialOpen(false);
+          // Auto-load next challenge after failure popup is dismissed
+          const la = lineAttemptsRef.current;
+          const ia = imageAttemptsRef.current;
+          const currentDone = activeTab === "line" ? la >= REQUIRED_ATTEMPTS : ia >= REQUIRED_ATTEMPTS;
+          if (!currentDone) {
+            loadChallenge(activeTab);
+          }
+        }}
         captchaType={failureCaptchaType}
         failureReason={failureReason}
       />
