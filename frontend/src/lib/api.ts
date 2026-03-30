@@ -229,6 +229,7 @@ export interface QuestionnaireData {
   sessionId: string;
   deviceType: string;
   ageRange: string;
+  techComfort: number;
   captchaFrequency: number;
   captcha1Difficulty: number;
   captcha1Frustration: number;

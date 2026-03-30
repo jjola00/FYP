@@ -789,6 +789,7 @@ def submit_questionnaire(payload: models.QuestionnaireRequest):
             "session_id": payload.sessionId,
             "device_type": payload.deviceType,
             "age_range": payload.ageRange,
+            "tech_comfort": payload.techComfort,
             "captcha_frequency": payload.captchaFrequency,
             "captcha1_difficulty": payload.captcha1Difficulty,
             "captcha1_frustration": payload.captcha1Frustration,

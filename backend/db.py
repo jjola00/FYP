@@ -122,6 +122,7 @@ def init_db() -> None:
                 session_id TEXT NOT NULL,
                 device_type TEXT,
                 age_range TEXT NOT NULL,
+                tech_comfort INTEGER,
                 captcha_frequency INTEGER NOT NULL,
                 captcha1_difficulty INTEGER NOT NULL,
                 captcha1_frustration INTEGER NOT NULL,
@@ -134,12 +135,16 @@ def init_db() -> None:
         )
         conn.commit()
 
-        # Migration: add device_type column to questionnaire_responses
-        try:
-            conn.execute("ALTER TABLE questionnaire_responses ADD COLUMN device_type TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass
+        # Migration: add device_type and tech_comfort columns to questionnaire_responses
+        for col_def in [
+            "ALTER TABLE questionnaire_responses ADD COLUMN device_type TEXT",
+            "ALTER TABLE questionnaire_responses ADD COLUMN tech_comfort INTEGER",
+        ]:
+            try:
+                conn.execute(col_def)
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
 
         # ── Line CAPTCHA challenges ──────────────────────────────
         conn.execute(
@@ -545,17 +550,18 @@ def save_questionnaire_response(data: Dict[str, Any]) -> None:
         conn.execute(
             """
             INSERT INTO questionnaire_responses (
-                id, session_id, device_type, age_range, captcha_frequency,
+                id, session_id, device_type, age_range, tech_comfort, captcha_frequency,
                 captcha1_difficulty, captcha1_frustration,
                 captcha2_difficulty, captcha2_frustration,
                 comments, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["id"],
                 data["session_id"],
                 data.get("device_type"),
                 data["age_range"],
+                data.get("tech_comfort"),
                 data["captcha_frequency"],
                 data["captcha1_difficulty"],
                 data["captcha1_frustration"],
@@ -572,6 +578,7 @@ def save_questionnaire_response(data: Dict[str, Any]) -> None:
         "session_id": data["session_id"],
         "device_type": data.get("device_type"),
         "age_range": data["age_range"],
+        "tech_comfort": data.get("tech_comfort"),
         "captcha_frequency": data["captcha_frequency"],
         "captcha1_difficulty": data["captcha1_difficulty"],
         "captcha1_frustration": data["captcha1_frustration"],

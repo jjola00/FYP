@@ -60,6 +60,7 @@ export default function QuestionnairePage() {
   // Form state
   const [deviceType, setDeviceType] = useState<string | null>(null);
   const [ageRange, setAgeRange] = useState<string | null>(null);
+  const [techComfort, setTechComfort] = useState<number | null>(null);
   const [captchaFrequency, setCaptchaFrequency] = useState<number | null>(null);
   const [captcha1Difficulty, setCaptcha1Difficulty] = useState<number | null>(null);
   const [captcha1Frustration, setCaptcha1Frustration] = useState<number | null>(null);
@@ -80,6 +81,7 @@ export default function QuestionnairePage() {
   const isValid =
     deviceType !== null &&
     ageRange !== null &&
+    techComfort !== null &&
     captchaFrequency !== null &&
     captcha1Difficulty !== null &&
     captcha1Frustration !== null &&
@@ -96,6 +98,7 @@ export default function QuestionnairePage() {
         sessionId: getSessionId(),
         deviceType: deviceType!,
         ageRange: ageRange!,
+        techComfort: techComfort!,
         captchaFrequency: captchaFrequency!,
         captcha1Difficulty: captcha1Difficulty!,
         captcha1Frustration: captcha1Frustration!,
@@ -181,7 +184,20 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                3. How often do you encounter CAPTCHAs online?
+                3. How comfortable are you with technology?
+              </p>
+              <LikertScale
+                name="techComfort"
+                value={techComfort}
+                onChange={setTechComfort}
+                lowLabel="1 = Beginner"
+                highLabel="5 = Daily power user"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-medium text-foreground">
+                4. How often do you encounter CAPTCHAs online?
               </p>
               <LikertScale
                 name="captchaFrequency"
@@ -201,7 +217,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                4. How difficult was CAPTCHA 1 (Trace the Path)?
+                5. How difficult was CAPTCHA 1 (Trace the Path)?
               </p>
               <LikertScale
                 name="captcha1Difficulty"
@@ -214,7 +230,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                5. How frustrating was CAPTCHA 1 (Trace the Path)?
+                6. How frustrating was CAPTCHA 1 (Trace the Path)?
               </p>
               <LikertScale
                 name="captcha1Frustration"
@@ -227,7 +243,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                6. How difficult was CAPTCHA 2 (Spot the Crossings)?
+                7. How difficult was CAPTCHA 2 (Spot the Crossings)?
               </p>
               <LikertScale
                 name="captcha2Difficulty"
@@ -240,7 +256,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                7. How frustrating was CAPTCHA 2 (Spot the Crossings)?
+                8. How frustrating was CAPTCHA 2 (Spot the Crossings)?
               </p>
               <LikertScale
                 name="captcha2Frustration"
@@ -253,7 +269,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                8. Any additional comments or feedback? (optional but the more feedback, the better the study!)
+                9. Any additional comments or feedback? (optional but the more feedback, the better the study!)
               </p>
               <textarea
                 value={comments}

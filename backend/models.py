@@ -134,6 +134,7 @@ class QuestionnaireRequest(BaseModel):
     sessionId: str
     deviceType: str
     ageRange: str
+    techComfort: int = Field(..., ge=1, le=5)
     captchaFrequency: int = Field(..., ge=1, le=5)
     captcha1Difficulty: int = Field(..., ge=1, le=5)
     captcha1Frustration: int = Field(..., ge=1, le=5)
