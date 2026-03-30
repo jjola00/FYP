@@ -96,41 +96,17 @@ export default function InfoSheetPage() {
 
           <p>Yours sincerely,</p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr>
-                  <th className="border border-border px-3 py-2 text-left font-semibold">
-                    Oluwajomiloju Olajitan
-                  </th>
-                  <th className="border border-border px-3 py-2 text-left font-semibold">
-                    Dr Roisin Lyons
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="border border-border px-3 py-2">
-                    23373326@studentmail.ul.ie
-                  </td>
-                  <td className="border border-border px-3 py-2">
-                    Dept. of Management &amp; Marketing
-                  </td>
-                </tr>
-                <tr>
-                  <td className="border border-border px-3 py-2"></td>
-                  <td className="border border-border px-3 py-2">
-                    003531 7006474
-                  </td>
-                </tr>
-                <tr>
-                  <td className="border border-border px-3 py-2"></td>
-                  <td className="border border-border px-3 py-2">
-                    Roisin.Lyons@ul.ie
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            <div className="rounded-md border border-border p-3">
+              <p className="font-semibold">Oluwajomiloju Olajitan</p>
+              <p className="text-muted-foreground">23373326@studentmail.ul.ie</p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="font-semibold">Dr Roisin Lyons</p>
+              <p className="text-muted-foreground">Dept. of Management &amp; Marketing</p>
+              <p className="text-muted-foreground">003531 7006474</p>
+              <p className="text-muted-foreground">Roisin.Lyons@ul.ie</p>
+            </div>
           </div>
 
           <div className="flex justify-center pt-4">
