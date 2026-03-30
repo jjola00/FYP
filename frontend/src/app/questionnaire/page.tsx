@@ -253,7 +253,7 @@ export default function QuestionnairePage() {
 
             <div className="space-y-2">
               <p className="font-medium text-foreground">
-                8. Any additional comments? (optional)
+                8. Any additional comments or feedback? (optional but the more feedback, the better the study!)
               </p>
               <textarea
                 value={comments}
