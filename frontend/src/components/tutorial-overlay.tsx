@@ -80,8 +80,34 @@ function LineTutorial() {
         />
       </circle>
 
-      {/* End dot */}
-      <circle cx="230" cy="50" r="6" fill="rgba(34,197,94,0.8)" />
+      {/* End dot — fades in and pulses as cursor approaches */}
+      {/* Outer glow */}
+      <circle cx="230" cy="50" r="14" fill="rgba(34,197,94,0)">
+        <animate
+          attributeName="fill"
+          values="rgba(34,197,94,0);rgba(34,197,94,0);rgba(34,197,94,0);rgba(34,197,94,0.15);rgba(34,197,94,0.25);rgba(34,197,94,0.25)"
+          keyTimes="0;0.5;0.7;0.85;0.95;1"
+          dur="3s"
+          repeatCount="indefinite"
+        />
+      </circle>
+      {/* Inner dot */}
+      <circle cx="230" cy="50" r="0" fill="rgba(34,197,94,0)">
+        <animate
+          attributeName="r"
+          values="0;0;0;4;8;10;10"
+          keyTimes="0;0.5;0.65;0.75;0.88;0.95;1"
+          dur="3s"
+          repeatCount="indefinite"
+        />
+        <animate
+          attributeName="fill"
+          values="rgba(34,197,94,0);rgba(34,197,94,0);rgba(34,197,94,0);rgba(34,197,94,0.3);rgba(34,197,94,0.7);rgba(34,197,94,0.9);rgba(34,197,94,0.9)"
+          keyTimes="0;0.5;0.65;0.75;0.88;0.95;1"
+          dur="3s"
+          repeatCount="indefinite"
+        />
+      </circle>
     </svg>
   );
 }
@@ -175,7 +201,7 @@ const LINE_STEPS: PopupStep[] = [
   {
     title: "Trace the Path",
     description:
-      "Press and hold the blue dot, then drag along the dashed line without lifting. The path reveals itself as you go. Trace naturally, you don't need to be super accurate. Just relax and move at a comfortable pace.",
+      "Press and hold the blue dot, then drag along the dashed line without lifting. The path reveals itself as you go. A green dot will glow as you approach the finish. Trace naturally, you don't need to be super accurate.",
     content: LineTutorial,
   },
   {

@@ -269,9 +269,26 @@ export function CaptchaCanvas({
       ctx.fill();
 
       if (showFinishRef.current && finishPointRef.current) {
-        ctx.fillStyle = "rgba(34, 197, 94, 0.8)";
+        const dist = distanceToEndRef.current ?? 80;
+        // Progressive reveal: fade in from 80px to 20px, pulse when very close
+        const fadeStart = 80;
+        const fadeFull = 20;
+        const t = Math.max(0, Math.min(1, (fadeStart - dist) / (fadeStart - fadeFull)));
+        const opacity = t * 0.9;
+        const baseRadius = 6 + t * 4; // 6px at edge, 10px when close
+        const pulse = dist < 25 ? 1 + 0.15 * Math.sin(performance.now() / 150) : 0;
+        const radius = baseRadius + pulse * 4;
+
+        // Outer glow
+        ctx.fillStyle = `rgba(34, 197, 94, ${opacity * 0.3})`;
         ctx.beginPath();
-        ctx.arc(finishPointRef.current[0], finishPointRef.current[1], 8, 0, 2 * Math.PI);
+        ctx.arc(finishPointRef.current[0], finishPointRef.current[1], radius + 6, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Inner dot
+        ctx.fillStyle = `rgba(34, 197, 94, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(finishPointRef.current[0], finishPointRef.current[1], radius, 0, 2 * Math.PI);
         ctx.fill();
       }
       ctx.restore();

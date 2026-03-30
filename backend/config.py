@@ -76,7 +76,7 @@ TOLERANCE_JITTER_MOUSE_PX = 2
 TOLERANCE_JITTER_TOUCH_PX = 3
 
 # Finish reveal threshold (distance to end of path in px)
-FINISH_REVEAL_PX = 40
+FINISH_REVEAL_PX = 80
 
 FALLBACK_AFTER_FAILURES = 3
 
