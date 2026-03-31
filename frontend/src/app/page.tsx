@@ -70,7 +70,7 @@ function AttemptDots({
 export default function CaptchaPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [activeTab, setActiveTab] = useState<"line" | "visual">("line");
+  const [activeTab, setActiveTab] = useState<"line" | "visual">("visual");
   const [instruction, setInstruction] = useState(LINE_INSTRUCTION);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [imageChallenge, setImageChallenge] = useState<ImageChallenge | null>(null);
@@ -142,7 +142,7 @@ export default function CaptchaPage() {
     linePassesRef.current = storedLinePasses;
     imagePassesRef.current = storedImagePasses;
 
-    const startTab = storedLineAttempts >= REQUIRED_ATTEMPTS ? "visual" : "line";
+    const startTab = storedImageAttempts >= REQUIRED_ATTEMPTS ? "line" : "visual";
     setActiveTab(startTab);
     setReady(true);
   }, [router]);
@@ -214,7 +214,7 @@ export default function CaptchaPage() {
     if (lineDone && imageDone) {
       router.push("/questionnaire");
     } else {
-      const nextTab = lineDone ? "visual" : "line";
+      const nextTab = imageDone ? "line" : "visual";
       switchToTab(nextTab);
     }
   };
