@@ -3,7 +3,7 @@
 **Project:** "Beyond Recognition: Reframing CAPTCHAs as Human-Usable Moving Target Defences"
 **Author:** Oluwajomiloju (Jay) Olajitan, BSc Immersive Software Engineering, University of Limerick (2025/26)
 **Supervisors:** Dr. Salaheddin Alakkari, Dr. Roisin Lyons
-**Date of snapshot:** 2026-03-03
+**Date of snapshot:** 2026-03-31 (updated during live user study)
 
 ---
 
@@ -14,14 +14,16 @@ A dual-CAPTCHA research system built around Moving Target Defense (MTD) principl
 ### 1a. Line Tracing CAPTCHA (Motor-Control)
 - User holds down on a start dot and traces a progressively revealed Bezier path on an HTML5 Canvas.
 - Server reveals path segments via a `/captcha/line/peek` endpoint as the user advances.
-- On release, the full trajectory is submitted to `/captcha/line/verify` which runs 11+ anti-bot behavioral checks.
+- On release, the full trajectory is submitted to `/captcha/line/verify` which runs 11 anti-bot behavioral checks.
 - 6 path families: horizontal LR/RL, vertical TB/BT, diagonal, S-curve. Weighted random selection per challenge.
-- 10-second TTL, 75% coverage requirement, per-challenge tolerance jitter.
+- 20-second TTL, 75% coverage requirement, per-challenge tolerance jitter.
+- Progressive green finish dot glows as user approaches the end (visible from 80px away, pulses at 25px).
 
 ### 1b. Image Intersection CAPTCHA (Visual-Reasoning / Accessible Alternative)
 - 2-3 procedurally generated colored lines (straight, quadratic Bezier) drawn on a dark canvas.
 - User clicks on where lines intersect. Intersection coordinates are computed and stored server-side only, never sent to client.
-- 30-second TTL (intentionally longer -- accessibility path), 15px click tolerance (mouse), 22px (touch), no grace clicks (any stray click = fail), 800ms minimum solve time.
+- 20-second TTL, 15px click tolerance (mouse), 22px (touch), no grace clicks (any stray click = immediate fail), 800ms minimum solve time.
+- numIntersections removed from client API response (security fix -- attacker cannot see expected count in DevTools).
 - Exploits known VLM blind spots: ~58% VLM accuracy on line intersections (BlindTest, ACCV 2024), spatial click localization persistently hard even for GPT-5 (COGNITION, 2025).
 
 ---
@@ -31,8 +33,9 @@ A dual-CAPTCHA research system built around Moving Target Defense (MTD) principl
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.13, FastAPI 0.115.5, uvicorn, numpy, SQLite (WAL mode) |
-| Frontend | Next.js 15.5, React 19, TypeScript, Tailwind CSS, Radix UI, HTML5 Canvas |
-| Deployment | Backend on Render, Frontend on Vercel |
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, Radix UI, HTML5 Canvas |
+| Deployment | Backend on Render (free tier, ephemeral filesystem), Frontend on Vercel (auto-deploy) |
+| Data persistence | Supabase (PostgreSQL) as cloud backup mirror of SQLite -- all attempt_logs, image_attempt_logs, questionnaire_responses mirrored via REST API |
 | Testing | pytest, custom bot_sim.py, shell scripts for ablation studies |
 | Security | HMAC-SHA256 tokens, in-memory sliding-window rate limiting, per-challenge nonce replay prevention |
 
@@ -42,121 +45,170 @@ A dual-CAPTCHA research system built around Moving Target Defense (MTD) principl
 
 | File | Role |
 |------|------|
-| `backend/main.py` | FastAPI app, line CAPTCHA endpoints (`/captcha/line/new`, `/peek`, `/verify`), all behavioral analysis logic |
+| `backend/main.py` | FastAPI app, line CAPTCHA endpoints (`/captcha/line/new`, `/peek`, `/verify`), questionnaire endpoint (`/questionnaire`), all behavioral analysis logic |
 | `backend/path.py` | Bezier path generation (6 families), geometric utilities (curvature profile, lookahead, nearest-point projection) |
-| `backend/config.py` | All tunable parameters. 13 boolean enforcement toggles for ablation testing via env vars |
+| `backend/config.py` | All tunable parameters. 13 boolean enforcement toggles for ablation testing via env vars. Supabase config. Production secret warning. |
 | `backend/captcha_token.py` | HMAC-SHA256 token sign/verify with constant-time comparison |
 | `backend/image_challenge.py` | Procedural image CAPTCHA generator. Straight + quadratic Bezier lines. Vectorized segment-segment intersection finding with numpy |
-| `backend/image_validator.py` | Click validation via greedy distance matching with pointer-type-aware tolerances |
-| `backend/image_routes.py` | Image CAPTCHA API (`/captcha/image/generate`, `/captcha/image/validate`) |
-| `backend/db.py` | SQLite data layer. Tables: `challenges`, `attempt_logs`, `image_challenges`, `image_attempt_logs`, `feedback` |
-| `backend/rate_limit.py` | In-memory sliding window. `challenge_limiter` (30/60s), `feedback_limiter` (3/60s) |
-| `backend/models.py` | Pydantic request/response schemas for both CAPTCHA types |
+| `backend/image_validator.py` | Click validation via greedy distance matching with pointer-type-aware tolerances. No grace clicks. |
+| `backend/image_routes.py` | Image CAPTCHA API (`/captcha/image/generate`, `/captcha/image/validate`). numIntersections not sent to client. |
+| `backend/db.py` | SQLite data layer + Supabase backup mirror. Tables: `challenges`, `attempt_logs`, `image_challenges`, `image_attempt_logs`, `questionnaire_responses`, `feedback`. Every insert to attempt_logs, image_attempt_logs, questionnaire_responses, and feedback also POSTs to Supabase REST API (fire-and-forget, failures silently logged). |
+| `backend/rate_limit.py` | In-memory sliding window. `challenge_limiter` (60/60s -- raised for NAT/shared IP in computer labs), `feedback_limiter` (3/60s) |
+| `backend/models.py` | Pydantic request/response schemas for both CAPTCHA types + questionnaire |
 
 ---
 
 ## 4. Line CAPTCHA Behavioral Detection System
 
-The verify endpoint runs these checks (each has an env-var toggle for ablation):
+The verify endpoint runs 11 checks. Each has an env-var toggle for ablation:
 
-| Check | What It Detects | Config Toggle |
-|-------|----------------|---------------|
-| `too_perfect` | Mean + max deviation unrealistically small (bots follow path too precisely) | ENFORCE_BEHAVIOURAL |
-| `regularity` | Low CV on timing intervals AND step distances (bots move with machine-uniform spacing) | ENFORCE_REGULARITY |
-| `speed_const` | Speed std/mean ratio too low (bots maintain constant velocity) | ENFORCE_SPEED_LIMITS |
-| `curvature_adaptation` | No speed difference between straight and curved segments (humans slow on curves, bots don't) | ENFORCE_CURVATURE_ADAPTATION |
-| `ballistic_profile` | Flat velocity across first/mid/last thirds (humans accelerate early, decelerate late) | ENFORCE_BALLISTIC_PROFILE |
-| `hesitation` | No micro-pauses at high-curvature decision points (humans hesitate, bots don't) | ENFORCE_HESITATION |
-| `monotonic` | Path backtracking beyond 10px threshold | ENFORCE_MONOTONIC |
-| `peek_state` | Peek oracle abuse (rate, budget, distance, progressive decay) | ENFORCE_PEEK_STATE/RATE/DISTANCE/BUDGET |
-| `min_duration` | Solve time < 1000ms | ENFORCE_MIN_DURATION |
+| # | Check | What It Detects | Rejects Standalone? |
+|---|-------|----------------|---------------------|
+| 1 | `too_perfect` | Mean + max deviation unrealistically small | Yes |
+| 2 | `speed_const` | Speed std/mean ratio too low | Composite only (with regularity) |
+| 3 | `accel_flag` | Max acceleration spike exceeds cap | Composite only (with regularity) |
+| 4 | `accel_sign_change` | Too few acceleration direction changes when speed is constant | Composite only (with regularity) |
+| 5 | `speed_violation` | Instantaneous speed exceeds hard cap | Yes |
+| 6 | `regularity` | Both timing CV and step-distance CV below minimums | Yes |
+| 7 | `curvature_flag` | No speed adaptation between high/low curvature segments | Yes |
+| 8 | `ballistic_flag` | Speed profile across thirds is too flat | Composite only (with hesitation) |
+| 9 | `hesitation_flag` | Fewer than minimum micro-pauses at decision points | Composite only (with ballistic or regularity) |
+| 10 | `progress_ok` | Path backtracking beyond 10px threshold | Yes |
+| 11 | `too_fast` | Total solve duration below MIN_DURATION_MS (1000ms) | Yes |
 
-**Composite rejection logic** requires multiple corroborating signals to minimize false positives:
-- `(speed_const AND regularity)` -> reject
-- `(accel_flag AND regularity)` -> reject
-- `(ballistic_flag AND hesitation_flag)` -> reject
-- `too_perfect` alone -> reject (strongest single signal)
+**Composite rejection conditions** (require multiple corroborating signals):
+- `accel_flag AND regularity` -> reject
+- `speed_const AND regularity` -> reject
+- `accel_sign_change AND regularity` -> reject
+- `ballistic_flag AND hesitation_flag` -> reject
+- `hesitation_flag AND regularity` -> reject
+
+**Oracle-abuse detection** (peek endpoint, enforced via HTTP errors):
+- Peek rate limit (60ms min interval)
+- Peek budget (200 max requests)
+- Peek distance (empty response if cursor too far from path)
+- Peek state / progressive decay (max advance speed per second, reduced lookahead without cursor advance)
 
 ---
 
-## 5. Frontend Components
+## 5. Study Flow (User Experience)
+
+Participants follow this sequence:
+
+1. **Info sheet** (`/info-sheet`) -- reads study description. Backend `/health` ping fires silently to warm Render cold start.
+2. **Consent form** (`/consent`) -- 8 checkboxes, all required. Sets `study_consented` in sessionStorage. Clears tutorial flags.
+3. **Image CAPTCHA first** (5 attempts) -- shown first to build confidence (high pass rate). Tutorial overlay shows on first visit (2 steps: how-to + timed warning). Challenge only loads after tutorial is dismissed.
+4. **Interstitial** -- shows score (e.g. "You scored 4/5!").
+5. **Line CAPTCHA** (5 attempts) -- tutorial overlay shows (2 steps: how-to with "trace naturally" advice + timed warning).
+6. **Interstitial** -- shows score.
+7. **Questionnaire** (`/questionnaire`) -- gated: requires `lineAttempts >= 5 AND imageAttempts >= 5`. Fields: device type, age range, tech comfort (1-5), CAPTCHA frequency (1-5), difficulty per type (1-5), frustration per type (1-5), free-text comments.
+8. **Thank you** (`/thank-you`).
+
+Key behaviors:
+- Every completed attempt (pass or fail) counts toward the 5. No passes required to proceed.
+- Confetti fires on each pass. Failure shows animated tutorial popup with reason-specific guidance; next challenge loads on popup dismiss.
+- Consecutive failure morale nudge after 3 fails (encouragement text, no type switching).
+- Attempt counter shown: "Attempt 3 of 5".
+- Timeout auto-advances to next attempt (counts as failed attempt).
+- `captcha-verified` CustomEvent dispatched on each pass.
+
+---
+
+## 6. Frontend Components
 
 | Component | Role |
 |-----------|------|
-| `page.tsx` | Main page. Tabbed UI ("Trace the Path" / "Spot the Crossings"). Failure nudging after 3 fails. Dispatches `captcha-verified` CustomEvent. |
-| `captcha-canvas.tsx` | Line tracing canvas. requestAnimationFrame render loop, progressive peek, real-time deviation coloring, trajectory hash (SHA-256), human-friendly failure messages. |
-| `image-captcha-canvas.tsx` | Intersection click canvas. Draws straight/Bezier lines, click markers, keyboard accessibility (arrow keys + Enter). |
-| `tutorial-overlay.tsx` | One-time animated SVG tutorial for each challenge type. |
-| `feedback-widget.tsx` | Floating feedback form with image upload, Discord webhook. |
-| `api.ts` | Centralized API client. Session ID, fetch timeout (60s for cold starts), trajectory hash computation. |
+| `page.tsx` | Main page. Tabbed UI ("Trace the Path" / "Spot the Crossings"). Image CAPTCHA tab shown first. 5 attempts per type. Attempt tracking + pass tracking in sessionStorage. Interstitial with score after 5 attempts. |
+| `captcha-canvas.tsx` | Line tracing canvas. requestAnimationFrame render loop, progressive peek, real-time deviation coloring, trajectory hash (SHA-256), progressive green finish dot (fades in from 80px, pulses at 25px), `completedRef` guard prevents double-fire of onChallengeComplete. |
+| `image-captcha-canvas.tsx` | Intersection click canvas. Draws straight/Bezier lines, click markers, keyboard accessibility (arrow keys + Enter). Timeout calls onChallengeComplete. |
+| `tutorial-overlay.tsx` | Multi-step tutorial popups per CAPTCHA type (2 steps each). `onComplete` callback triggers challenge load -- challenges are NOT fetched until tutorial is dismissed. Includes timer hint SVG. |
+| `failure-tutorial.tsx` | Animated SVG failure-specific tutorials (incomplete, off-path, too-fast, timeout, natural for line; missed, excess, too-fast, timeout for image). |
+| `feedback-widget.tsx` | Floating feedback form with Discord webhook. (Not used in study flow.) |
+| `api.ts` | Centralized API client. Session ID via sessionStorage, fetch timeout (60s for cold starts), trajectory hash computation. Questionnaire submission endpoint. |
 
 ---
 
-## 6. Current Testing Infrastructure
+## 7. Database Schema
 
-### 6a. Bot Simulator (`scripts/bot_sim.py`)
-A Python script that exercises the exact same API as the real frontend. Simulates a full bot lifecycle:
-1. Create challenge (`/captcha/line/new`)
-2. Iteratively peek for lookahead segments (`/captcha/line/peek`)
-3. Step along the polyline with configurable: step size (px), timing (ms), spatial jitter, timing jitter, curvature-aware slowdown
-4. Submit trajectory (`/captcha/line/verify`)
+### SQLite (ephemeral on Render, backed up to Supabase)
 
-**CLI arguments:** `--step-px`, `--step-ms`, `--step-ms-jitter`, `--jitter-px`, `--curvature-aware`, `--curvature-slow-factor`, `--pointer-type`, `--attempts`, etc.
+**`attempt_logs`** (line CAPTCHA -- 35 columns):
+attempt_id, session_id, challenge_id, pointer_type, os_family, browser_family, device_pixel_ratio, path_seed, path_length_px, tolerance_px, tolerance_jitter_px, ttl_ms, started_at, ended_at, duration_ms, outcome_reason, coverage_ratio, coverage_len_ratio, mean_speed, max_speed, pause_count, pause_durations_json, deviation_stats_json, speed_const_flag, accel_flag, behavioural_flag, speed_violation, too_perfect_flag, bot_score, regularity_dt_cv, regularity_dd_cv, curvature_var_low, curvature_var_high, trajectory_json, created_at
 
-### 6b. Bot Test Runner (`scripts/run_bot_tests.sh`)
-Runs 5 bot variants x N attempts each:
-- `baseline`: no jitter, default speed
-- `jitter_1_5`: 1.5px spatial jitter
-- `slow_step_24`: slower step timing (24ms)
-- `curvature_aware_slow`: curvature adaptation + timing jitter + slower base
-- `touch_jitter_1_5`: touch pointer with 1.5px jitter
+**`image_attempt_logs`** (15 columns):
+attempt_id, challenge_id, num_lines, num_intersections, num_clicks, matched, excess, passed, reason, solve_time_ms, too_fast, clicks_json, pointer_type, tolerance_px, created_at
 
-### 6c. Ablation Study Runner (`scripts/run_ablation_tests.sh`)
-Launches separate backend instances on different ports, each with one security toggle disabled. Runs the full bot suite against each. Configurations tested: `hardened`, `no_peek_state`, `no_peek_rate`, `no_peek_distance`, `no_peek_budget`, `no_monotonic`, `no_speed_limits`, `no_min_duration`, `no_regularity`, `no_curvature_adaptation`, `no_behavioural`.
+**`questionnaire_responses`** (12 columns):
+id, session_id, device_type, age_range, tech_comfort, captcha_frequency, captcha1_difficulty, captcha1_frustration, captcha2_difficulty, captcha2_frustration, comments, created_at
 
-### 6d. Security Attack Tests (`backend/tests/security/`)
-- `test_hough_transform.py`: Renders image CAPTCHA to numpy, runs OpenCV Canny + HoughLinesP, submits detected intersections. Tests straight vs curved line resistance.
-- `test_vlm_attack.py`: Renders to PNG, sends to GPT-4o vision API, parses coordinate response, submits as clicks.
-- `test_relay_timing.py`: Simulates relay delays from 0 to TTL+5s in 2s increments, verifies TTL enforcement.
+**`challenges`** (line CAPTCHA active state), **`image_challenges`** (image CAPTCHA active state), **`feedback`** (unused)
 
-### 6e. Results Aggregation
-- `scripts/aggregate_ablation_results.py`: Parses results into CSV with Wilson score 95% CIs.
-- `scripts/summary_attempts.py`: Queries SQLite for pass rates, solve times, failure breakdowns.
-- `backend/scripts/export_metrics.py`: Exports structured JSON metrics for the FYP paper.
+### Supabase (persistent cloud mirror)
+Same schema as SQLite for: attempt_logs, image_attempt_logs, questionnaire_responses, feedback. Inserted via REST API after every SQLite write (fire-and-forget, failures silently logged).
 
 ---
 
-## 7. Testing Results So Far
+## 8. Key Config Values
 
-### Line CAPTCHA (Bot Tests)
+| Parameter | Line CAPTCHA | Image CAPTCHA |
+|-----------|-------------|---------------|
+| TTL | 20s | 20s |
+| Canvas | 400x400 | 400x400 |
+| Mouse tolerance | 20px (path), jitter +/-2px | 15px (click) |
+| Touch tolerance | 30px (path), jitter +/-3px | 22px (click) |
+| Min solve time | 1000ms | 800ms |
+| Coverage required | 75% | All intersections |
+| Grace clicks | -- | 0 (stray click = fail) |
+| Min samples | 20 trajectory points | -- |
+| Rate limit | 60 req/60s (shared) | 60 req/60s (shared) |
+| Finish reveal | 80px (progressive glow) | -- |
+| Line types | N/A | straight, quadratic Bezier |
+| Num lines | N/A | 2-3 |
+| Intersections | N/A | 1-3 |
 
-**Pre-hardening (Jan 16-20, 2026):** 200 attempts per config.
-- Hardened: baseline 25%, slow_step_24 40%, curvature_aware_slow 30%, jitter variants 0%
-- Removing curvature adaptation was the most devastating -- it was the dominant failure reason (~60% of all rejections)
-- Removing behavioral analysis increased baseline pass rate by ~13pp
-- Removing speed limits boosted curvature_aware_slow to 48.5%
+---
 
-**Jan 28 (relaxed timeout 7500ms):** slow_step_24 and curvature_aware_slow hit 100% pass rate -- showing time pressure itself is a defense.
+## 9. Testing Results
 
-**Post-hardening (Feb 4, 2026):** ALL bot variants at 0% pass rate across 200 attempts. New `too_perfect` detection catches bots that previously evaded curvature checks. This is the current state.
+### 9a. Bot Tests (Line CAPTCHA)
 
-### Line CAPTCHA Final Metrics
+**Post-hardening (Feb 4, 2026):** ALL bot variants at 0% pass rate across 200 attempts. 6 variants tested: baseline, jitter_1_5, slow_step_24, curvature_aware_slow, touch_jitter_1_5.
 
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| Bot rejection rate | >90% | **100%** (all 6 variants) |
-| Human pass rate | >80% | **~85%+** |
-| False positive rate | <20% | **~15%** |
-| Avg human solve time | <5s | **2-4s** |
+### 9b. Ablation Study
+Curvature adaptation removal was the most devastating -- dominant failure reason (~60% of all rejections). Removing behavioral analysis increased baseline pass rate by ~13pp. Removing speed limits boosted curvature_aware_slow to 48.5%.
 
-### Image CAPTCHA (Security Tests)
-- **VLM (GPT-4o):** Expected <60% solve rate based on BlindTest research (~58% VLM accuracy on line intersections)
+### 9c. Human User Study (LIVE -- started 2026-03-31)
+
+As of latest data pull:
+
+| Metric | Line CAPTCHA | Image CAPTCHA |
+|--------|-------------|---------------|
+| Pass rate (overall) | ~58% | ~88% |
+| Mouse pass rate | ~92% (n=25) | ~96% (n=24) |
+| Touch pass rate | ~46% (n=58) | ~85% (n=60) |
+| Avg difficulty (Likert) | 3.2/5 | 1.7/5 |
+| Avg frustration (Likert) | 3.4/5 | 1.9/5 |
+| Median solve time (pass) | ~2.5s | ~3s |
+| Completions | 16/17 sessions |
+| Dropout rate | 1/17 (6%) |
+
+**Key findings from live study:**
+- Mouse users ace both CAPTCHAs (92% line, 96% image). Touch users struggle with line (46%) but handle image fine (85%).
+- `incomplete` and `non_monotonic_time` are the dominant mobile failure reasons.
+- `non_monotonic_time` is a mobile browser timestamp ordering bug, not user error -- causes false rejections on iOS.
+- Finger occlusion is the #1 qualitative complaint (3+ comments: "my thumb covers the path").
+- Desktop users rate line CAPTCHA difficulty 1-2/5; mobile users rate it 3-5/5.
+- Image CAPTCHA consistently rated 1/5 difficulty and 1/5 frustration across devices.
+- One outlier participant (Android) rated image harder than line (4/5 vs 2/5).
+
+### 9d. Security Attack Tests (Image CAPTCHA)
+- **VLM (GPT-4o):** Expected <60% solve rate based on BlindTest research
 - **Hough Transform:** Bezier curves significantly degrade detection accuracy vs straight-only lines
-- **Relay timing:** 30s TTL with 15-25s typical relay overhead = very tight window
+- **Relay timing:** 20s TTL with 15-25s typical relay overhead = very tight window
 
 ---
 
-## 8. Research References (Key Papers Cited in FYP)
+## 10. Research References (Key Papers Cited in FYP)
 
 ### CAPTCHA Breaking
 | Paper | What It Broke | Result |
@@ -185,92 +237,48 @@ Launches separate backend instances on different ports, each with one security t
 | Cirjan (IEEE ICCAS 2025) | CAPTCHAs as MTD framework |
 | Searles "Dazed & Confused" (USENIX 2023) | Polymorphic web code generation against bots |
 
-### Open-Source Tools/Datasets Referenced
-- **Decaptcha** (Bursztein et al., 2011) -- generic text CAPTCHA solver
-- **ImageBreaker** (Hossen et al., 2019) -- reCAPTCHA v2 online breaker
-- **unCaptcha** (Bock et al., 2017) -- audio reCAPTCHA solver
-- **BeCAPTCHA-Mouse** (Acien et al., 2021) -- behavioral bot detection
-- **HuMIdb** -- 600-user public multimodal biometric dataset
-- **MCA-Bench** (Wu et al., 2025) -- multimodal CAPTCHA robustness benchmark
-
 ---
 
-## 9. What Has Been Tested vs. What Hasn't
-
-### DONE (Local/Custom Bots)
-- Custom `bot_sim.py` with 5 strategy variants against line CAPTCHA -- **all at 0% as of Feb 4**
-- Full ablation study measuring contribution of each defense layer
-- Comprehensive behavioral detection (11+ checks with composite rejection logic)
-- Security tests for image CAPTCHA: Hough Transform, VLM (GPT-4o), relay timing
-
-### NOT DONE (The Gap)
-- **No testing against established open-source CAPTCHA-solving tools** that have published results against real CAPTCHAs (reCAPTCHA, hCaptcha, etc.)
-- The current bot_sim.py is a custom script that exercises the API directly -- it does not represent the sophistication of tools that have been refined against production CAPTCHA systems
-- No testing against:
-  - Browser-automation-based solvers (Selenium/Playwright bots that interact with the actual frontend DOM/Canvas)
-  - ML-based trajectory generators trained on human mouse movement datasets (e.g., BeCAPTCHA-Mouse style)
-  - Vision-pipeline solvers beyond the single GPT-4o test (e.g., YOLO-based, ensemble approaches)
-  - CAPTCHA-solving services/APIs (2Captcha, Anti-Captcha style approaches)
-  - RL-trained mouse trajectory emulators (Akrout et al., 2019 style)
-- No cross-validation against other CAPTCHA implementations to benchmark relative security
-- The human usability study (30+ adults, mouse/touch, Likert frustration) is described in the methodology but results are not yet in the logs
-
----
-
-## 10. Architecture Diagram (Simplified)
+## 11. Architecture Diagram (Simplified)
 
 ```
                           FRONTEND (Next.js / Vercel)
                     ┌──────────────────────────────────┐
+                    │  /info-sheet → /consent → /       │
                     │  page.tsx (tab switcher)          │
-                    │  ├── captcha-canvas.tsx (line)    │
                     │  ├── image-captcha-canvas.tsx     │
-                    │  ├── feedback-widget.tsx          │
-                    │  └── tutorial-overlay.tsx         │
+                    │  ├── captcha-canvas.tsx (line)    │
+                    │  ├── tutorial-overlay.tsx         │
+                    │  ├── failure-tutorial.tsx         │
+                    │  └── /questionnaire → /thank-you  │
                     │  api.ts (fetch + session + hash)  │
                     └──────────────┬───────────────────┘
                                    │ HTTPS
                     ┌──────────────▼───────────────────┐
                     │      BACKEND (FastAPI / Render)    │
                     │                                    │
+                    │  IMAGE CAPTCHA (shown first)       │
+                    │  ├── /captcha/image/generate       │
+                    │  └── /captcha/image/validate       │
+                    │                                    │
                     │  LINE CAPTCHA                      │
                     │  ├── /captcha/line/new   (path.py) │
                     │  ├── /captcha/line/peek  (path.py) │
                     │  └── /captcha/line/verify (main.py)│
-                    │      └── 11+ behavioral checks     │
+                    │      └── 11 behavioral checks      │
                     │                                    │
-                    │  IMAGE CAPTCHA                     │
-                    │  ├── /captcha/image/generate       │
-                    │  │   └── image_challenge.py        │
-                    │  └── /captcha/image/validate       │
-                    │      └── image_validator.py         │
+                    │  POST /questionnaire                │
+                    │  GET  /health                       │
                     │                                    │
                     │  SHARED: token, rate_limit, db     │
-                    └──────────────┬───────────────────┘
-                                   │
-                    ┌──────────────▼───────────────────┐
-                    │  SQLite (data/captcha.db)          │
-                    │  challenges, attempt_logs,         │
-                    │  image_challenges,                 │
-                    │  image_attempt_logs, feedback      │
-                    └───────────────────────────────────┘
+                    └────────┬─────────────┬────────────┘
+                             │             │
+               ┌─────────────▼──┐   ┌──────▼──────────────┐
+               │  SQLite         │   │  Supabase (backup)   │
+               │  (ephemeral)    │   │  (persistent cloud)  │
+               │  data/captcha.db│   │  REST API mirror     │
+               └────────────────┘   └─────────────────────┘
 ```
-
----
-
-## 11. Key Config Values
-
-| Parameter | Line CAPTCHA | Image CAPTCHA |
-|-----------|-------------|---------------|
-| TTL | 10s | 30s |
-| Canvas | 400x400 | 400x400 |
-| Mouse tolerance | 20px (path), jitter +/-2px | 15px (click), -- |
-| Touch tolerance | 30px (path), jitter +/-3px | 22px (click), -- |
-| Min solve time | 1000ms | 800ms |
-| Coverage required | 75% | All intersections |
-| Grace | -- | 0 (any stray click = fail) |
-| Min samples | 20 trajectory points | -- |
-| Rate limit | 30 req/60s | 30 req/60s |
 
 ---
 
@@ -279,85 +287,84 @@ Launches separate backend instances on different ports, each with one security t
 ```
 FYP/
 ├── backend/
-│   ├── main.py                    # Line CAPTCHA API + behavioral analysis
-│   ├── config.py                  # All parameters + enforcement toggles
+│   ├── main.py                    # Line CAPTCHA API + behavioral analysis + questionnaire
+│   ├── config.py                  # All parameters + enforcement toggles + Supabase config
 │   ├── path.py                    # Bezier path generation + geometry
 │   ├── captcha_token.py           # HMAC-SHA256 tokens
-│   ├── db.py                      # SQLite layer
-│   ├── models.py                  # Pydantic schemas
-│   ├── image_challenge.py         # Image CAPTCHA generator
-│   ├── image_validator.py         # Click validation
-│   ├── image_routes.py            # Image CAPTCHA API
-│   ├── feedback_routes.py         # Feedback + Discord webhook
-│   ├── rate_limit.py              # Sliding window limiter
+│   ├── db.py                      # SQLite layer + Supabase backup mirror
+│   ├── models.py                  # Pydantic schemas (both CAPTCHAs + questionnaire)
+│   ├── image_challenge.py         # Image CAPTCHA generator (straight + quadratic Bezier)
+│   ├── image_validator.py         # Click validation (no grace clicks)
+│   ├── image_routes.py            # Image CAPTCHA API (numIntersections not sent to client)
+│   ├── feedback_routes.py         # Feedback + Discord webhook (unused in study)
+│   ├── rate_limit.py              # Sliding window limiter (60 req/60s)
 │   ├── requirements.txt
 │   ├── render.yaml                # Deployment config
-│   ├── scripts/
-│   │   └── export_metrics.py      # JSON metrics export
 │   └── tests/
-│       ├── conftest.py            # Isolated test DB fixture
-│       ├── test_image_challenge.py
-│       ├── test_image_routes.py
-│       ├── test_image_validator.py
-│       ├── test_token.py
 │       └── security/
-│           ├── test_hough_transform.py  # CV attack
-│           ├── test_vlm_attack.py       # GPT-4o attack
-│           └── test_relay_timing.py     # CAPTCHA farm simulation
+│           ├── test_hough_transform.py
+│           ├── test_vlm_attack.py
+│           └── test_relay_timing.py
 ├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx           # Main page (tab switcher)
-│   │   │   ├── layout.tsx         # Root layout + theme
-│   │   │   └── globals.css
-│   │   ├── components/
-│   │   │   ├── captcha-canvas.tsx  # Line tracing canvas
-│   │   │   ├── image-captcha-canvas.tsx  # Intersection click canvas
-│   │   │   ├── feedback-widget.tsx
-│   │   │   ├── tutorial-overlay.tsx
-│   │   │   └── ui/               # Radix/shadcn components
-│   │   ├── lib/
-│   │   │   ├── api.ts            # API client + types
-│   │   │   └── utils.ts
-│   │   └── hooks/
-│   └── package.json
+│   └── src/
+│       ├── app/
+│       │   ├── page.tsx           # Main page (image first, 5 attempts each)
+│       │   ├── info-sheet/page.tsx # Participant info + backend warm-up ping
+│       │   ├── consent/page.tsx   # 8-checkbox consent form
+│       │   ├── questionnaire/page.tsx # Post-task questionnaire (9 questions)
+│       │   └── thank-you/page.tsx
+│       ├── components/
+│       │   ├── captcha-canvas.tsx  # Line tracing (progressive finish dot, completedRef guard)
+│       │   ├── image-captcha-canvas.tsx  # Intersection clicks
+│       │   ├── tutorial-overlay.tsx # Multi-step tutorials with onComplete callback
+│       │   ├── failure-tutorial.tsx # Animated failure-specific guidance
+│       │   └── ui/               # Radix/shadcn components
+│       └── lib/
+│           └── api.ts            # API client + types + questionnaire submission
 ├── scripts/
 │   ├── bot_sim.py                 # Custom bot simulator
+│   ├── dashboard.py               # Live study dashboard (Dash/Plotly, reads from Supabase)
 │   ├── run_bot_tests.sh           # 5-variant bot test runner
 │   ├── run_ablation_tests.sh      # Ablation study runner
-│   ├── aggregate_ablation_results.py  # Wilson CI CSV export
-│   └── summary_attempts.py        # DB metrics summary
+│   ├── backup_and_reset_db.py     # SQLite backup + clear script
+│   ├── aggregate_ablation_results.py
+│   └── summary_attempts.py
 ├── docs/
+│   ├── codebase-state-and-testing-context.md  # THIS FILE
 │   ├── FYP.md                     # Main thesis document
-│   ├── fyp-additions.txt          # Curvature coupling findings
-│   ├── image-captcha-architecture.md  # Image CAPTCHA spec
-│   ├── image-captcha-research.md  # Research justification
-│   ├── line-captcha-assessment.md # Vulnerability analysis
-│   ├── line-captcha-results.md    # Final line CAPTCHA results
-│   ├── line-research.txt          # Hardening research
-│   └── phase-5-6-guide.md        # Integration & testing guide
-├── logs/
-│   ├── bot-tests/                 # Timestamped bot test results
-│   └── ablations/                 # Timestamped ablation results
+│   ├── image-captcha-architecture.md
+│   ├── image-captcha-research.md
+│   ├── line-captcha-assessment.md
+│   ├── line-captcha-results.md
+│   └── phase-5-6-guide.md
 ├── data/
-│   └── captcha.db                 # SQLite database
-└── src/
-    └── line_captcha/
-        └── config.ts              # Shared TS config constants
+│   ├── captcha.db                 # SQLite database (ephemeral on Render)
+│   └── pre_study_comments.md      # Saved pre-study tester comments
+└── logs/
+    ├── bot-tests/
+    └── ablations/
 ```
 
 ---
 
-## 13. The Goal: Moving to Open-Source Bot Testing
+## 13. Environment Variables (Production)
 
-The current testing uses a **custom-built bot simulator** (`bot_sim.py`) that directly calls the backend API with synthetic trajectory data. While this has been effective for iterating on defenses (achieving 100% rejection), it has a critical limitation for the FYP paper: **it doesn't demonstrate resistance against the class of tools that have actually broken production CAPTCHAs.**
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `LINE_CAPTCHA_SECRET` | Render | HMAC signing key (warns on startup if default) |
+| `ALLOWED_ORIGINS` | Render | CORS: `https://fyp-mu-nine.vercel.app` |
+| `SUPABASE_URL` | Render | Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | Render | Supabase service role key (bypasses RLS) |
+| `NEXT_PUBLIC_API_BASE` | Vercel | Render backend URL |
 
-The papers referenced in the FYP thesis document real-world attacks against reCAPTCHA, hCaptcha, and other systems using sophisticated, publicly available tools. To make the security evaluation credible and publishable, the testing needs to expand to include:
+---
 
-1. **Browser-automation bots** (Selenium/Playwright/Puppeteer) that interact with the real frontend Canvas element, not just the API -- testing whether the behavioral detection holds up against bots that must operate through the browser rendering pipeline
-2. **ML-trained mouse trajectory generators** -- tools like BeCAPTCHA-Mouse that have been trained on real human movement datasets and can produce realistic-looking trajectories
-3. **RL-based CAPTCHA solvers** -- approaches in the style of Akrout et al. (2019) that learned to bypass reCAPTCHA v3's behavioral scoring
-4. **Vision-based solvers** for the image CAPTCHA -- beyond the single GPT-4o test, testing against YOLO pipelines, ensemble VLM approaches, and tools like the ones that broke reCAPTCHA v2 image grids
-5. **CAPTCHA-solving service simulation** -- testing whether the TTL and token mechanics actually prevent relay-style attacks at the speeds commercial solving services operate
+## 14. Known Issues & Limitations
 
-This would close the gap between "our custom bot can't beat it" and "established attack tools referenced in the literature can't beat it."
+- **Render free tier**: Ephemeral filesystem (SQLite resets on deploy). Supabase backup is the persistent data store.
+- **Render cold starts**: 30-60s wake-up. Mitigated by `/health` ping on info sheet page.
+- **`non_monotonic_time` on iOS**: Mobile Safari sometimes emits pointer events with non-strictly-increasing timestamps. Causes false rejections. Left unchanged mid-study for consistency.
+- **Finger occlusion on mobile**: User's finger covers the path being traced. Most common qualitative complaint. Future work: offset the visible path above the touch point.
+- **`num_lines` in image_attempt_logs**: Always 0 (never populated with actual count). Harmless but unused column.
+- **Session storage = per-tab**: New tab = fresh session. Participants could theoretically redo the study. Acceptable for supervised study.
+- **No server-side session tracking**: Study completion gate is client-side (sessionStorage). Could be bypassed via DevTools. Low risk for voluntary study participants.

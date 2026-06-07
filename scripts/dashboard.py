@@ -4,6 +4,8 @@ Beyond Recognition — Study Results Dashboard
 
 Run:  python scripts/dashboard.py
 Open: http://localhost:8050
+
+Data refreshes on every page load.
 """
 
 import json
@@ -36,32 +38,27 @@ def fetch(table):
         return json.loads(resp.read())
 
 
-line_data = fetch("attempt_logs")
-image_data = fetch("image_attempt_logs")
-quest_data = fetch("questionnaire_responses")
+def fetch_all():
+    return fetch("attempt_logs"), fetch("image_attempt_logs"), fetch("questionnaire_responses")
 
-# ─── Derived data ────────────────────────────────────────────────
-
-line_sessions = defaultdict(list)
-for a in line_data:
-    line_sessions[a["session_id"]].append(a)
-
-quest_by_session = {q["session_id"]: q for q in quest_data}
-
-total_participants = len(line_sessions)
-completed_participants = len(quest_data)
-
-line_pass_rate = (
-    sum(1 for a in line_data if a["outcome_reason"] == "success") / max(len(line_data), 1) * 100
-)
-image_pass_rate = (
-    sum(1 for a in image_data if a["passed"] == 1) / max(len(image_data), 1) * 100
-)
 
 # ─── Figures ─────────────────────────────────────────────────────
 
 
-def make_overview_cards():
+def make_overview_cards(line_data, image_data, quest_data):
+    line_sessions = defaultdict(list)
+    for a in line_data:
+        line_sessions[a["session_id"]].append(a)
+
+    total_participants = len(line_sessions)
+    completed_participants = len(quest_data)
+    line_pass_rate = (
+        sum(1 for a in line_data if a["outcome_reason"] == "success") / max(len(line_data), 1) * 100
+    )
+    image_pass_rate = (
+        sum(1 for a in image_data if a["passed"] == 1) / max(len(image_data), 1) * 100
+    )
+
     fig = go.Figure()
     fig.add_trace(go.Indicator(
         mode="number", value=total_participants,
@@ -74,13 +71,13 @@ def make_overview_cards():
         domain={"row": 0, "column": 1},
     ))
     fig.add_trace(go.Indicator(
-        mode="number+delta", value=line_pass_rate,
+        mode="number", value=line_pass_rate,
         title={"text": "Line Pass %"},
         number={"suffix": "%"},
         domain={"row": 0, "column": 2},
     ))
     fig.add_trace(go.Indicator(
-        mode="number+delta", value=image_pass_rate,
+        mode="number", value=image_pass_rate,
         title={"text": "Image Pass %"},
         number={"suffix": "%"},
         domain={"row": 0, "column": 3},
@@ -93,7 +90,7 @@ def make_overview_cards():
     return fig
 
 
-def make_line_outcomes():
+def make_line_outcomes(line_data):
     reasons = Counter(a["outcome_reason"] for a in line_data)
     labels = list(reasons.keys())
     values = list(reasons.values())
@@ -108,7 +105,7 @@ def make_line_outcomes():
     return fig
 
 
-def make_image_outcomes():
+def make_image_outcomes(image_data):
     reasons = Counter(a["reason"] for a in image_data)
     labels = list(reasons.keys())
     values = list(reasons.values())
@@ -123,17 +120,19 @@ def make_image_outcomes():
     return fig
 
 
-def make_per_session_pass_rates():
+def make_per_session_pass_rates(line_data):
+    line_sessions = defaultdict(list)
+    for a in line_data:
+        line_sessions[a["session_id"]].append(a)
+
     sessions = []
     line_rates = []
-    image_rates = []
     for sid, attempts in sorted(line_sessions.items(), key=lambda x: x[1][0]["created_at"]):
         short = sid[:8]
         lp = sum(1 for a in attempts if a["outcome_reason"] == "success")
         sessions.append(short)
         line_rates.append(lp / len(attempts) * 100)
 
-    # Image doesn't have session_id — approximate by matching timestamps
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=sessions, y=line_rates,
@@ -149,7 +148,7 @@ def make_per_session_pass_rates():
     return fig
 
 
-def make_solve_times():
+def make_solve_times(line_data, image_data):
     line_success = [a["duration_ms"] for a in line_data if a["outcome_reason"] == "success"]
     line_fail = [a["duration_ms"] for a in line_data if a["outcome_reason"] != "success"]
     img_success = [a["solve_time_ms"] for a in image_data if a["passed"] == 1]
@@ -174,10 +173,8 @@ def make_solve_times():
     return fig
 
 
-def make_coverage_distribution():
+def make_coverage_distribution(line_data):
     coverages = [a["coverage_ratio"] for a in line_data if a["coverage_ratio"] is not None]
-    outcomes = [a["outcome_reason"] for a in line_data if a["coverage_ratio"] is not None]
-    colors = ["#22c55e" if o == "success" else "#ef4444" for o in outcomes]
 
     fig = go.Figure(go.Histogram(
         x=coverages, nbinsx=20,
@@ -194,7 +191,7 @@ def make_coverage_distribution():
     return fig
 
 
-def make_pointer_comparison():
+def make_pointer_comparison(line_data, image_data):
     mouse_line = [a for a in line_data if a["pointer_type"] == "mouse"]
     touch_line = [a for a in line_data if a["pointer_type"] == "touch"]
     mouse_pass = sum(1 for a in mouse_line if a["outcome_reason"] == "success")
@@ -240,7 +237,7 @@ def make_pointer_comparison():
     return fig
 
 
-def make_questionnaire_charts():
+def make_questionnaire_charts(quest_data):
     if not quest_data:
         return go.Figure().update_layout(
             title="No questionnaire data yet",
@@ -276,7 +273,7 @@ def make_questionnaire_charts():
     return fig
 
 
-def make_comments_section():
+def make_comments_section(quest_data):
     comments = []
     for q in quest_data:
         if q.get("comments"):
@@ -303,7 +300,7 @@ def make_comments_section():
     return comments
 
 
-def make_timeline():
+def make_timeline(line_data, image_data):
     timestamps = []
     labels = []
     colors = []
@@ -337,62 +334,70 @@ def make_timeline():
 
 app = Dash(__name__)
 
-app.layout = html.Div(
-    style={
-        "backgroundColor": "#111827",
-        "minHeight": "100vh",
-        "padding": "24px",
-        "fontFamily": "system-ui, sans-serif",
-        "color": "white",
-    },
-    children=[
-        html.H1(
-            "Beyond Recognition — Study Dashboard",
-            style={"textAlign": "center", "marginBottom": "8px", "color": "#818cf8"},
-        ),
-        html.P(
-            f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M')} | "
-            f"{len(line_data)} line attempts | {len(image_data)} image attempts | "
-            f"{len(quest_data)} questionnaires",
-            style={"textAlign": "center", "color": "#9ca3af", "marginBottom": "24px"},
-        ),
 
-        dcc.Graph(figure=make_overview_cards()),
+def serve_layout():
+    """Called on every page load — fetches fresh data from Supabase."""
+    line_data, image_data, quest_data = fetch_all()
 
-        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
-            dcc.Graph(figure=make_line_outcomes()),
-            dcc.Graph(figure=make_image_outcomes()),
-        ]),
+    return html.Div(
+        style={
+            "backgroundColor": "#111827",
+            "minHeight": "100vh",
+            "padding": "24px",
+            "fontFamily": "system-ui, sans-serif",
+            "color": "white",
+        },
+        children=[
+            html.H1(
+                "Beyond Recognition — Study Dashboard",
+                style={"textAlign": "center", "marginBottom": "8px", "color": "#818cf8"},
+            ),
+            html.P(
+                f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
+                f"{len(line_data)} line attempts | {len(image_data)} image attempts | "
+                f"{len(quest_data)} questionnaires",
+                style={"textAlign": "center", "color": "#9ca3af", "marginBottom": "24px"},
+            ),
 
-        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
-            dcc.Graph(figure=make_pointer_comparison()),
-            dcc.Graph(figure=make_solve_times()),
-        ]),
+            dcc.Graph(figure=make_overview_cards(line_data, image_data, quest_data)),
 
-        html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
-            dcc.Graph(figure=make_coverage_distribution()),
-            dcc.Graph(figure=make_per_session_pass_rates()),
-        ]),
+            html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
+                dcc.Graph(figure=make_line_outcomes(line_data)),
+                dcc.Graph(figure=make_image_outcomes(image_data)),
+            ]),
 
-        dcc.Graph(figure=make_questionnaire_charts()),
+            html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
+                dcc.Graph(figure=make_pointer_comparison(line_data, image_data)),
+                dcc.Graph(figure=make_solve_times(line_data, image_data)),
+            ]),
 
-        dcc.Graph(figure=make_timeline()),
+            html.Div(style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px"}, children=[
+                dcc.Graph(figure=make_coverage_distribution(line_data)),
+                dcc.Graph(figure=make_per_session_pass_rates(line_data)),
+            ]),
 
-        html.Div(
-            style={
-                "maxWidth": "600px",
-                "margin": "24px auto",
-                "padding": "16px",
-                "backgroundColor": "#1f2937",
-                "borderRadius": "8px",
-            },
-            children=[
-                html.H3("Participant Comments", style={"marginBottom": "16px"}),
-                *make_comments_section(),
-            ],
-        ),
-    ],
-)
+            dcc.Graph(figure=make_questionnaire_charts(quest_data)),
+
+            dcc.Graph(figure=make_timeline(line_data, image_data)),
+
+            html.Div(
+                style={
+                    "maxWidth": "600px",
+                    "margin": "24px auto",
+                    "padding": "16px",
+                    "backgroundColor": "#1f2937",
+                    "borderRadius": "8px",
+                },
+                children=[
+                    html.H3("Participant Comments", style={"marginBottom": "16px"}),
+                    *make_comments_section(quest_data),
+                ],
+            ),
+        ],
+    )
+
+
+app.layout = serve_layout
 
 if __name__ == "__main__":
     print("Dashboard: http://localhost:8050")

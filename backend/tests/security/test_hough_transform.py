@@ -76,8 +76,7 @@ def render_challenge_to_image(client_data: dict) -> np.ndarray:
             )
 
     fig.canvas.draw()
-    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    data = np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy()
     plt.close()
 
     return data[:, :, ::-1]  # RGB → BGR for OpenCV
@@ -134,6 +133,7 @@ def find_hough_intersections(img: np.ndarray, canvas_w: int, canvas_h: int) -> l
 def main():
     parser = argparse.ArgumentParser(description="Hough Transform Attack Test")
     parser.add_argument("--n", type=int, default=50, help="Number of challenges")
+    parser.add_argument("--output", default=None, help="Save results JSON to file")
     args = parser.parse_args()
 
     from backend.image_challenge import generate_challenge
@@ -141,6 +141,7 @@ def main():
 
     results = {"total": args.n, "solved": 0, "failed": 0}
     line_type_results = {"straight_only": {"total": 0, "solved": 0}, "has_curves": {"total": 0, "solved": 0}}
+    all_attempts = []
 
     for i in range(args.n):
         challenge = generate_challenge()
@@ -170,6 +171,16 @@ def main():
         else:
             results["failed"] += 1
 
+        all_attempts.append({
+            "challenge": i + 1,
+            "passed": result["passed"],
+            "reason": result["reason"],
+            "matched": result["matched"],
+            "expected": result["expected"],
+            "category": category,
+            "detected_intersections": len(detected),
+        })
+
         if (i + 1) % 10 == 0:
             print(f"  Progress: {i + 1}/{args.n}")
 
@@ -183,6 +194,15 @@ def main():
         if data["total"] > 0:
             rate = data["solved"] / data["total"] * 100
             print(f"  {cat}: {data['solved']}/{data['total']} ({rate:.1f}%)")
+
+    if args.output:
+        from pathlib import Path as P
+        output_path = P(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        with open(output_path, "w") as f:
+            json.dump({"summary": results, "line_type_results": line_type_results, "attempts": all_attempts}, f, indent=2)
+        print(f"\nResults saved to {args.output}")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ Usage:
 No external dependencies required beyond the backend itself.
 """
 
+import argparse
 import json
 import sys
 import time
@@ -20,6 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Relay Timing Test")
+    parser.add_argument("--output", default=None, help="Save results JSON to file")
+    args = parser.parse_args()
+
     from backend import config, db
     from backend.image_challenge import generate_challenge
     from backend.image_validator import validate_clicks
@@ -85,6 +90,13 @@ def main():
         print(f"\nAll delays passed — TTL ({ttl_s}s) may be too generous")
     else:
         print(f"\nAll delays rejected — timing checks are strict")
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            json.dump({"ttl_ms": config.IMAGE_CHALLENGE_TTL_MS, "results": results}, f, indent=2)
+        print(f"\nResults saved to {args.output}")
 
 
 if __name__ == "__main__":
